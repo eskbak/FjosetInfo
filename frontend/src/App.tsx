@@ -8,7 +8,7 @@ import type { Theme, Colors } from "./types";
 export default function App() {
   // Theme (08–21 day; otherwise night)
   const hour = new Date().getHours();
-  const isDay = hour >= 6 && hour < 21;
+  const isDay = hour >= 11 && hour < 21;
 
   const theme: Theme = isDay
     ? { bg: "#f6f7f9", text: "#0b1220", card: "#ffffff", border: "#e5e7eb" }
@@ -33,15 +33,14 @@ export default function App() {
     boxSizing: "border-box",
   };
 
-  // Date (Norwegian)
-  const todayNo = useMemo(
-    () =>
-      new Date().toLocaleDateString("nb-NO", {
-        day: "2-digit",
-        month: "long",
-      }),
-    []
-  );
+const todayNo = useMemo(() => {
+  const d = new Date();
+  const fmt = new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "short" });
+  return fmt
+    .formatToParts(d)
+    .map(p => (p.type === "month" ? p.value.replace(/\.$/, "") : p.value))
+    .join("");
+}, []);
 
   // View switching
   type ViewKey = "dashboard" | "mock" | "matchday";
@@ -96,7 +95,7 @@ export default function App() {
             cursor: "pointer",
           }}
         >
-          Mock
+          News
         </button>
         <button
           onClick={() => setView("matchday")}

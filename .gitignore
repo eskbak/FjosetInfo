@@ -1,0 +1,60 @@
+# --- OS / Editor junk ---
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*.tmp
+*.log
+*.orig
+
+# VS Code (keep recommendations if you want)
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# --- Node / JS toolchains ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+package-lock.json.*
+yarn.lock.*
+pnpm-lock.yaml.*
+
+# Caches
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+.turbo/
+.babel-cache/
+.rpt2_cache/
+.webpack-cache/
+.wrangler/
+.vercel/
+.netlify/
+.next/
+.nuxt/
+.svelte-kit/
+.storybook-out/
+.fusebox/
+
+# Vite / build outputs
+dist/
+build/
+out/
+coverage/
+.nyc_output/
+.gatsby/
+storybook-static/
+
+# Test artifacts
+coverage/
+cypress/videos/
+cypress/screenshots/
+playwright-report/
+test-results/
+
+#

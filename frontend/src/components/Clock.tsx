@@ -9,9 +9,10 @@ export default function Clock() {
   return (
     <div
       style={{
-        fontSize: "3.0em",
+        fontSize: "4.5em",
         fontWeight: 600,
         fontVariantNumeric: "tabular-nums",
+        opacity: 0.75,
       }}
     >
       {time.toLocaleTimeString("nb-NO", { hour: "2-digit", minute: "2-digit" })}

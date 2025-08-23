@@ -74,7 +74,7 @@ export default function YRCard({ theme, isDay, lat, lon, hours = 5 }: Props) {
   return (
     <section style={cardStyle}>
       {!yr ? (
-        <div style={{ opacity: 0.7, fontSize: "1.6em" }}>Laster været…</div>
+        <div style={{ opacity: 0.7, fontSize: "3.6em", }}>Laster været…</div>
       ) : (
         <>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -87,32 +87,32 @@ export default function YRCard({ theme, isDay, lat, lon, hours = 5 }: Props) {
                 <col style={{ width: "22%" }} />
               </colgroup>
               <thead>
-                <tr style={{ textAlign: "left", opacity: 0.65, fontSize: "1.4em" }}>
+                <tr style={{ textAlign: "left", opacity: 0.65, fontSize: "1.8em" }}>
                   <th style={{ padding: "0.1em 0.3em", paddingLeft: 30 }}>Tid</th>
-                  <th style={{ padding: "0.1em 0.3em" }}>Vær</th>
+                  <th style={{ padding: "0.1em 0.3em", paddingLeft: 30 }}>Vær</th>
                   <th style={{ padding: "0.1em 0.3em" }}>Temp.</th>
-                  <th style={{ padding: "0.1em 0.3em" }}>Nedbør (mm)</th>
+                  <th style={{ padding: "0.1em 0.3em" }}>Nedbør</th>
                   <th style={{ padding: "0.1em 0.3em", textAlign: "right", paddingRight: 44 }}>Vind (m/s)</th>
                 </tr>
               </thead>
               <tbody>
                 {yr.hours?.map((h: any, i: number) => (
                   <tr key={i} style={{ borderTop: i > 0 ? `1px solid ${theme.border}` : "none" }}>
-                    <td style={{ padding: "0.4em 0.5em", paddingLeft: 30, fontSize: "2.0em", fontWeight: 400 }}>
+                    <td style={{ padding: "0.4em 0.5em", paddingLeft: 30, fontSize: "2.8em", fontWeight: 400 }}>
                       {h.time}
                     </td>
-                    <td style={{ padding: "0.4em 0.5em", fontSize: "2.0em" }}>{symbolToEmoji(h.symbol)}</td>
-                    <td style={{ padding: "0.4em 0.5em", fontSize: "2.0em" }}>
+                    <td style={{ padding: "0.4em 0.5em", fontSize: "2.8em" }}>{symbolToEmoji(h.symbol)}</td>
+                    <td style={{ padding: "0.4em 0.5em", fontSize: "2.8em" }}>
                       {h.temp ?? "—"}°
                     </td>
-                    <td style={{ padding: "0.4em 0.5em", fontSize: "2.0em", color: "#046dc9ff", paddingLeft: 60 }}>
+                    <td style={{ padding: "0.4em 0.5em", fontSize: "2.8em", color: "#046dc9ff", paddingLeft: 40 }}>
                       {renderPrecip(h)}
                     </td>
                     <td
                       style={{
                         padding: "0.4em 0.5em",
                         paddingRight: 44,
-                        fontSize: "2.0em",
+                        fontSize: "2.8em",
                         display: "flex",
                         alignItems: "center",
                         gap: 12,

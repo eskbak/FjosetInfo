@@ -61,12 +61,12 @@ export default function AtBCard({ theme, isDay, stopPlaceId, maxRows = 5 }: Prop
         <>
           <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
             <colgroup>
-              <col style={{ width: "60%" }} />
+              <col style={{ width: "50%" }} />
               <col style={{ width: "20%" }} />
-              <col style={{ width: "20%" }} />
+              <col style={{ width: "25%" }} />
             </colgroup>
             <thead>
-              <tr style={{ textAlign: "left", opacity: 0.65, fontSize: "1.4em" }}>
+              <tr style={{ textAlign: "left", opacity: 0.65, fontSize: "1.8em" }}>
                 <th style={{ padding: "0.35em 0.3em", paddingLeft: 30 }}>Destinasjon</th>
                 <th style={{ padding: "0.35em 0.3em" }}>Avgang</th>
                 <th style={{ padding: "0.35em 0.3em", textAlign: "right", paddingRight: 60 }}>Om</th>
@@ -75,13 +75,25 @@ export default function AtBCard({ theme, isDay, stopPlaceId, maxRows = 5 }: Prop
             <tbody>
               {departures.map((d: any, i: number) => (
                 <tr key={i} style={{ borderTop: i > 0 ? `1px solid ${theme.border}` : "none" }}>
-                  <td style={{ padding: "0.4em 0.3em", paddingLeft: 30, fontSize: "2.0em", fontWeight: 400 }}>
-                    {d.destination}
-                  </td>
-                  <td style={{ padding: "0.4em 0.3em", fontSize: "2.0em", fontVariantNumeric: "tabular-nums", fontWeight: 400 }}>
+<td
+  style={{
+    padding: "0.4em 0.3em",
+    paddingLeft: 35,
+    fontSize: "2.8em",
+    fontWeight: 400,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    maxWidth: "200px" // adjust as needed
+  }}
+>
+  {d.destination}
+</td>
+
+                  <td style={{ padding: "0.4em 0.3em", fontSize: "2.8em", fontVariantNumeric: "tabular-nums", fontWeight: 400 }}>
                     {d.expected ? format(parseISO(d.expected), "HH:mm") : "—"}
                   </td>
-                  <td style={{ padding: "0.4em 0.3em", fontSize: "2.0em", textAlign: "right", fontWeight: 400, paddingRight: 60 }}>
+                  <td style={{ padding: "0.4em 0.3em", fontSize: "2.8em", textAlign: "right", fontWeight: 400, paddingRight: 60 }}>
                     {d.inMin !== null ? `${d.inMin} min` : "—"}
                   </td>
                 </tr>

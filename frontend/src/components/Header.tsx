@@ -8,6 +8,7 @@ export default function Header({ todayText }: { todayText: string }) {
         gridTemplateColumns: "1fr auto 1fr",  // left | center | right
         alignItems: "center",
         padding: "0.6em 1.2em",
+        paddingBottom: 30,
         gap: 12,
       }}
     >
@@ -33,11 +34,12 @@ export default function Header({ todayText }: { todayText: string }) {
       <h2
         style={{
           justifySelf: "end",
-          fontSize: "3.0em",
+          fontSize: "4.5em",
           fontWeight: 500,
           margin: 0,
           whiteSpace: "nowrap",
           textAlign: "right",
+          opacity: 0.75,
         }}
       >
         {todayText}
