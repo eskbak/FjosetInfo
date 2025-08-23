@@ -2,7 +2,6 @@ import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
-import { google } from "googleapis";
 
 // ---------------- Types ----------------
 type EnturDeparture = {
