@@ -1,11 +1,12 @@
 import Clock from "./Clock";
+import kua from "../assets/kua.png"; // adjust path if your file lives elsewhere
 
 export default function Header({ todayText }: { todayText: string }) {
   return (
     <header
       style={{
         display: "grid",
-        gridTemplateColumns: "1fr auto 1fr",  // left | center | right
+        gridTemplateColumns: "1fr auto 1fr",
         alignItems: "center",
         padding: "0.6em 1.2em",
         paddingBottom: 30,
@@ -15,27 +16,24 @@ export default function Header({ todayText }: { todayText: string }) {
       <div style={{ justifySelf: "start" }}>
         <Clock />
       </div>
-      
 
-      <h1
-        style={{
-          justifySelf: "center",
-          fontSize: "6.0em",
-          fontWeight: 700,
-          margin: 0,
-          letterSpacing: "0.02em",
-          textAlign: "center",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {/* Ku */}
-      </h1>
+      {/* Center logo instead of <h1> */}
+      <div style={{ justifySelf: "center", lineHeight: 0 }}>
+        <img
+          src={kua}
+          alt="Kua"
+          style={{
+            height: "10em",     // matches your previous h1 size
+            display: "block",  // avoid baseline gap
+          }}
+        />
+      </div>
 
       <h2
         style={{
           justifySelf: "end",
           fontSize: "5.5em",
-          fontWeight: 500,
+          fontWeight: 400,
           margin: 0,
           whiteSpace: "nowrap",
           textAlign: "right",
