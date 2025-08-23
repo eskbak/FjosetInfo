@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { format as fmt, parseISO, isSameDay } from "date-fns";
 
 // ---------------- Types ----------------
 type EnturDeparture = {
@@ -322,15 +321,9 @@ app.get('/api/nrk/latest', async (req: Request, res: Response) => {
   }
 });
 
-// Simple in-memory cache for matchday data
-let matchdayCache: { data: any; timestamp: number } | null = null;
-const MATCHDAY_CACHE_MS = 60 * 1000; // 1 minute
-
 app.get("/api/matchday/today", async (req: Request, res: Response) => {
-  const now = Date.now();
-  if (matchdayCache && now - matchdayCache.timestamp < MATCHDAY_CACHE_MS) {
-    return res.json(matchdayCache.data);
-  }
+
+    console.log("FOOTBALL_DATA_TOKEN:", process.env.FOOTBALL_DATA_TOKEN);
 
   try {
     const token = process.env.FOOTBALL_DATA_TOKEN || "";
@@ -427,15 +420,12 @@ app.get("/api/matchday/today", async (req: Request, res: Response) => {
     const fixturesToday = out.filter(f => f.utcDate.slice(0, 10) === todayStr)
       .sort((a, b) => a.utcDate.localeCompare(b.utcDate));
 
-    // At the end, before sending the response:
-    const response = {
+    return res.json({
       date: todayStr,
       hasMatches: fixturesToday.length > 0,
       fixtures: fixturesToday,
       source: token ? "football-data.org" : "mock",
-    };
-    matchdayCache = { data: response, timestamp: Date.now() };
-    return res.json(response);
+    });
   } catch (e: any) {
     return res.status(500).json({ error: e?.message || "Matchday error" });
   }
@@ -467,7 +457,6 @@ app.get("/api/crest", async (req: Request, res: Response) => {
     return res.status(500).send(e?.message || "Crest proxy error");
   }
 });
-
 
 app.listen(PORT, () => {
   console.log(`Proxy listening on http://localhost:${PORT}`);
