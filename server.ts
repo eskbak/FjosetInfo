@@ -76,14 +76,6 @@ const TEAMS = [
 const app = express();
 app.use(cors());
 
-import path from "path";
-import { fileURLToPath } from "url";
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const distDir = path.join(__dirname, "frontend", "dist");
-app.use(express.static(distDir));
-app.get("*", (_req, res) => res.sendFile(path.join(distDir, "index.html")));
-
 const PORT = Number(process.env.PORT || 8787);
 const ET_CLIENT_NAME = process.env.ET_CLIENT_NAME || 'pi-infoscreen/0.1 (example@example.com)';
 const MET_USER_AGENT = process.env.MET_USER_AGENT || 'pi-infoscreen/0.1 (example@example.com)';
@@ -590,4 +582,18 @@ app.get("/api/crest", async (req: Request, res: Response) => {
 
 app.listen(PORT, () => {
   console.log(`Proxy listening on http://localhost:${PORT}`);
+});
+
+// ---- place this AT THE VERY BOTTOM, after every /api route ----
+import path from "path";
+import { fileURLToPath } from "url";
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const distDir = path.join(__dirname, "frontend", "dist");
+
+// serve built assets
+app.use(express.static(distDir));
+
+// SPA fallback for non-API routes ONLY (exclude /api/*)
+app.get(/^\/(?!api\/).*/, (_req, res) => {
+  res.sendFile(path.join(distDir, "index.html"));
 });
