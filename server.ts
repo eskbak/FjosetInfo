@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import { google } from "googleapis";
 
 // ---------------- Types ----------------
 type EnturDeparture = {
@@ -318,6 +319,41 @@ app.get('/api/nrk/latest', async (req: Request, res: Response) => {
     return res.json({ source: feedUrl, items });
   } catch (e: any) {
     return res.status(500).json({ error: e?.message || 'NRK error' });
+  }
+});
+
+app.get("/api/calendar/upcoming", async (req, res) => {
+  try {
+    const calendarId = process.env.VITE_CALENDAR_ID;
+    const apiKey = process.env.GOOGLE_API_KEY; // You need to create and add this to your .env
+
+    if (!calendarId || !apiKey) {
+      return res.status(400).json({ error: "Missing calendar ID or API key" });
+    }
+
+    const calendar = google.calendar({ version: "v3", auth: apiKey });
+    const now = new Date().toISOString();
+
+    const events = await calendar.events.list({
+      calendarId,
+      timeMin: now,
+      maxResults: 5,
+      singleEvents: true,
+      orderBy: "startTime",
+    });
+
+    res.json({
+      events: events.data.items?.map(ev => ({
+        id: ev.id,
+        summary: ev.summary,
+        start: ev.start?.dateTime || ev.start?.date,
+        end: ev.end?.dateTime || ev.end?.date,
+        location: ev.location,
+        description: ev.description,
+      })) || [],
+    });
+  } catch (e) {
+    res.status(500).json({ error: e?.message || "Calendar error" });
   }
 });
 
