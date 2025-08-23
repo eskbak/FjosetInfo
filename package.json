@@ -1,5 +1,6 @@
 {
   "name": "pi-infoscreen",
+  "homepage": "https://eskbak.github.io/FjosetInfo",
   "version": "1.0.0",
   "private": true,
   "description": "Raspberry Pi infoscreen — AtB 25 + YR today + NRK latest",
@@ -15,7 +16,9 @@
     "preview:frontend": "npm run preview --prefix frontend",
     "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:frontend\"",
     "build": "npm run build --prefix frontend",
-    "start": "concurrently -k \"npm:start:server\" \"npm:preview:frontend\""
+    "start": "concurrently -k \"npm:start:server\" \"npm:preview:frontend\"",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -28,6 +31,7 @@
     "@types/express": "^4.17.23",
     "@types/node": "^24.3.0",
     "concurrently": "^8.2.2",
+    "gh-pages": "^6.3.0",
     "tsx": "^4.20.4",
     "typescript": "^5.9.2"
   }
