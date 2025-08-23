@@ -353,7 +353,11 @@ app.get("/api/calendar/upcoming", async (req, res) => {
       })) || [],
     });
   } catch (e) {
-    res.status(500).json({ error: e?.message || "Calendar error" });
+  const msg =
+    e instanceof Error ? e.message :
+    typeof e === "string" ? e :
+    "Internal error";
+  res.status(500).json({ error: msg });
   }
 });
 
