@@ -13,8 +13,8 @@ export default function MockView({
 }) {
   return (
     <main style={{ display: "flex", flexDirection: "column", flex: 1, gap: 20, marginTop: 20 }}>
-      <NRKCard theme={theme} colors={colors} isDay={isDay} />
-      <CalendarCard />
+      {/* <NRKCard theme={theme} colors={colors} isDay={isDay} /> */}
+      <CalendarCard theme={theme} colors={colors} isDay={isDay}/>
     </main>
   );
 }

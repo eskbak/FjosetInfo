@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
 import { google } from "googleapis";
 
 // ---------------- Types ----------------
@@ -322,44 +323,125 @@ app.get('/api/nrk/latest', async (req: Request, res: Response) => {
   }
 });
 
-app.get("/api/calendar/upcoming", async (req, res) => {
-  try {
-    const calendarId = process.env.VITE_CALENDAR_ID;
-    const apiKey = process.env.GOOGLE_API_KEY; // You need to create and add this to your .env
+async function getAccessToken(): Promise<string> {
+  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN } = process.env;
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REFRESH_TOKEN) {
+    throw new Error("Missing GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN");
+  }
 
-    if (!calendarId || !apiKey) {
-      return res.status(400).json({ error: "Missing calendar ID or API key" });
+  const body = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    client_secret: GOOGLE_CLIENT_SECRET,
+    refresh_token: GOOGLE_REFRESH_TOKEN,
+    grant_type: "refresh_token",
+  });
+
+  // let TS infer fetch() response OR annotate with globalThis.Response
+  const resp /* : globalThis.Response */ = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`Token exchange failed (${resp.status}): ${text}`);
+  }
+  const json = (await resp.json()) as { access_token?: string };
+  if (!json.access_token) throw new Error("No access_token in token response");
+  return json.access_token;
+}
+
+type GoogleEventItem = {
+  id: string;
+  summary?: string;
+  location?: string;
+  description?: string;
+  htmlLink?: string;
+  start: { date?: string; dateTime?: string; timeZone?: string };
+  end:   { date?: string; dateTime?: string; timeZone?: string };
+};
+
+async function fetchAllEvents(
+  accessToken: string,
+  calId: string,
+  baseParams: Record<string, string>
+): Promise<GoogleEventItem[]> {
+  const all: GoogleEventItem[] = [];
+  let pageToken: string | undefined;
+  let safety = 0;
+
+  do {
+    const params = new URLSearchParams({
+      ...baseParams,
+      maxResults: "250",
+      ...(pageToken ? { pageToken } : {}),
+    });
+
+    const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+      calId
+    )}/events?${params.toString()}`;
+
+    const resp /* : globalThis.Response */ = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      throw new Error(`Calendar page fetch failed (${resp.status}): ${text}`);
     }
 
-    const calendar = google.calendar({ version: "v3", auth: apiKey });
-    const now = new Date().toISOString();
+    const json = (await resp.json()) as { items?: GoogleEventItem[]; nextPageToken?: string };
+    if (Array.isArray(json.items)) all.push(...json.items);
+    pageToken = json.nextPageToken || undefined;
 
-    const events = await calendar.events.list({
-      calendarId,
-      timeMin: now,
-      maxResults: 5,
-      singleEvents: true,
+    safety += 1;
+    if (safety > 20) break;
+  } while (pageToken);
+
+  return all;
+}
+
+app.get("/api/calendar/upcoming", async (req: ExpressRequest, res: ExpressResponse) => {
+  try {
+    const calId = process.env.GOOGLE_CALENDAR_ID;
+    if (!calId) throw new Error("Missing GOOGLE_CALENDAR_ID");
+
+    const accessToken = await getAccessToken();
+
+    const now = new Date();
+    const defaultStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const defaultEnd   = new Date(defaultStart.getFullYear(), defaultStart.getMonth(), defaultStart.getDate() + 4, 23, 59, 59, 999);
+
+    const timeMin = (typeof req.query.timeMin === "string" ? new Date(req.query.timeMin) : defaultStart).toISOString();
+    const timeMax = (typeof req.query.timeMax === "string" ? new Date(req.query.timeMax) : defaultEnd).toISOString();
+
+    const items = await fetchAllEvents(accessToken, calId, {
+      singleEvents: "true",
       orderBy: "startTime",
+      timeMin,
+      timeMax,
     });
 
+    res.setHeader("Cache-Control", "public, max-age=30");
     res.json({
-      events: events.data.items?.map(ev => ({
-        id: ev.id,
-        summary: ev.summary,
-        start: ev.start?.dateTime || ev.start?.date,
-        end: ev.end?.dateTime || ev.end?.date,
-        location: ev.location,
-        description: ev.description,
-      })) || [],
+      items: items.map(it => ({
+        id: it.id,
+        summary: it.summary,
+        location: it.location,
+        description: it.description,
+        htmlLink: it.htmlLink,
+        start: it.start,
+        end: it.end,
+      })),
     });
   } catch (e) {
-  const msg =
-    e instanceof Error ? e.message :
-    typeof e === "string" ? e :
-    "Internal error";
-  res.status(500).json({ error: msg });
+    const msg = e instanceof Error ? e.message : "Internal error";
+    res.status(500).json({ error: msg });
   }
 });
+
+
 
 app.get("/api/matchday/today", async (req: Request, res: Response) => {
 
