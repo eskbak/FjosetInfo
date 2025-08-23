@@ -11,7 +11,7 @@ type Props = {
   rotateMs?: number; // default 20000
 };
 
-export default function NRKCard({ theme, isDay, colors, rotateMs = 2000 }: Props) {
+export default function NRKCard({ theme, isDay, colors, rotateMs = 10000 }: Props) {
   const [nrk, setNrk] = useState<any>(null);
   const [index, setIndex] = useState(0);
 

@@ -48,7 +48,7 @@ export default function App() {
   type ViewKey = "dashboard" | "news" | "calendar";
   const ORDER: ViewKey[] = ["dashboard", "news", "calendar"];
 
-  const ROTATE_MS = 25_000;
+  const ROTATE_MS = 45_000;
   const PRELOAD_MS = 5_000; // start warming ~5s before switch
 
   const [view, setView] = useState<ViewKey>("dashboard");
