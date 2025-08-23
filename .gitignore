@@ -57,4 +57,20 @@ cypress/screenshots/
 playwright-report/
 test-results/
 
-#
+# TypeScript
+*.tsbuildinfo
+
+# Env files (keep them local)
+.env
+.env.*
+!.env.example
+.env.local
+.env.*.local
+
+# Images/build artifacts created at runtime
+*.tgz
+*.zip
+
+# Misc
+.idea/
+*.iml
