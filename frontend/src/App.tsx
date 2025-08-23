@@ -3,7 +3,6 @@ import Header from "./components/Header";
 import DashboardView from "./views/DashboardView";
 import NewsView from "./views/NewsView";
 import CalendarView from "./views/CalendarView";
-import MatchdayView from "./views/MatchdayView";
 import type { Theme, Colors } from "./types";
 
 export default function App() {
@@ -46,8 +45,8 @@ export default function App() {
   }, []);
 
   // ---- rotation + prefetch (no hidden mounting) ----
-  type ViewKey = "dashboard" | "news" | "calendar" | "matchday";
-  const ORDER: ViewKey[] = ["dashboard", "news", "calendar", "matchday"];
+  type ViewKey = "dashboard" | "news" | "calendar";
+  const ORDER: ViewKey[] = ["dashboard", "news", "calendar"];
 
   const ROTATE_MS = 25_000;
   const PRELOAD_MS = 5_000; // start warming ~5s before switch
@@ -72,8 +71,6 @@ export default function App() {
           // Example:
           // await fetch("/api/yr/today?lat=...&lon=...&hours=6");
           // await fetch("/api/entur/departures?stopPlaceId=...&max=...");
-        } else if (name === "matchday") {
-          // Optional: warm whatever MatchdayView needs
         }
 
         // (Optional) pre-warm view code chunk if you code-split with React.lazy later:
@@ -127,9 +124,6 @@ export default function App() {
       {view === "calendar" && (
         <CalendarView theme={theme} colors={COLORS} isDay={isDay} />
       )}
-      {view === "matchday" && (
-        <MatchdayView theme={theme} />
-      )}
 
       {/* dev view switcher */}
       <div
@@ -180,19 +174,6 @@ export default function App() {
           }}
         >
           Calendar
-        </button>
-        <button
-          onClick={() => setView("matchday")}
-          style={{
-            padding: "6px 10px",
-            borderRadius: 10,
-            border: `1px solid ${theme.border}`,
-            background: theme.card,
-            color: theme.text,
-            cursor: "pointer",
-          }}
-        >
-          Matchday
         </button>
       </div>
     </div>
