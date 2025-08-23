@@ -7,14 +7,14 @@
     "node": ">=18"
   },
   "scripts": {
-    "dev:server": "tsx server.ts",
+    "dev:server": "tsx --tsconfig tsconfig.json server.ts",
     "build:server": "tsc -p tsconfig.json",
     "start:server": "node dist/server.js",
-    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:frontend": "vite --host",
     "build:frontend": "npm run build --prefix frontend",
     "preview:frontend": "npm run preview --prefix frontend",
     "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:frontend\"",
-    "build": "npm run build:server && npm run build:frontend",
+    "build": "npm run build --prefix frontend",
     "start": "concurrently -k \"npm:start:server\" \"npm:preview:frontend\""
   },
   "dependencies": {

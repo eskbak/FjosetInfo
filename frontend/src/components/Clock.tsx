@@ -9,7 +9,7 @@ export default function Clock() {
   return (
     <div
       style={{
-        fontSize: "4.5em",
+        fontSize: "5.5em",
         fontWeight: 600,
         fontVariantNumeric: "tabular-nums",
         opacity: 0.75,

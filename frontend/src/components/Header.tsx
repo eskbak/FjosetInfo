@@ -34,7 +34,7 @@ export default function Header({ todayText }: { todayText: string }) {
       <h2
         style={{
           justifySelf: "end",
-          fontSize: "4.5em",
+          fontSize: "5.5em",
           fontWeight: 500,
           margin: 0,
           whiteSpace: "nowrap",

@@ -11,7 +11,7 @@ type Props = {
   rotateMs?: number; // default 20000
 };
 
-export default function NRKCard({ theme, isDay, colors, rotateMs = 20000 }: Props) {
+export default function NRKCard({ theme, isDay, colors, rotateMs = 2000 }: Props) {
   const [nrk, setNrk] = useState<any>(null);
   const [index, setIndex] = useState(0);
 
@@ -95,7 +95,7 @@ export default function NRKCard({ theme, isDay, colors, rotateMs = 20000 }: Prop
 
         {/* HEADER / TITLE */}
         <div>
-          <div style={{ fontWeight: 600, fontSize: "4.0em", lineHeight: 1.1, opacity: 0.8, textAlign: "center" }}>
+          <div style={{ fontWeight: 600, fontSize: "5.0em", lineHeight: 1.1, opacity: 0.8, textAlign: "center" }}>
             {it.title}
           </div>
         </div>
@@ -106,7 +106,7 @@ export default function NRKCard({ theme, isDay, colors, rotateMs = 20000 }: Prop
             <div
               style={{
                 opacity: 0.85,
-                fontSize: "3.5em",
+                fontSize: "4.5em",
                 fontWeight: 200,
                 lineHeight: 1.2,
                 display: "-webkit-box",
@@ -140,8 +140,8 @@ export default function NRKCard({ theme, isDay, colors, rotateMs = 20000 }: Prop
             <span
               key={i}
               style={{
-                width: 8,
-                height: 8,
+                width: 15,
+                height: 15,
                 borderRadius: 999,
                 background: i === (index % nrk.items.length) ? colors.NRK.primary : theme.border,
                 display: "inline-block",

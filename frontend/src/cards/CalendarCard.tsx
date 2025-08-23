@@ -1,6 +1,9 @@
 // frontend/src/cards/CalendarCard.tsx
 import { useEffect, useMemo, useState } from "react";
 import type { Theme, Colors } from "../types";
+import PoweredBy from "../components/PoweredBy";
+import googleLogoLight from "../assets/googleLogoLight.png";
+import googleLogoDark from "../assets/googleLogoDark.png";
 
 type Props = {
   theme?: Theme;
@@ -193,7 +196,7 @@ export default function CalendarCard({
 
   // ---------- styles ----------
   const COL_WIDTH = 150;
-  const LANE_HEIGHT = 64; // thicker bars
+  const LANE_HEIGHT = 120; // thicker bars
   const GAP = 6;
 
   const cardStyle: React.CSSProperties = {
@@ -212,11 +215,11 @@ export default function CalendarCard({
     Kristian:"#d97706", Niklas:"#db2777", Marius:"#9333ea",
   };
   const blockStyle = (bg:string): React.CSSProperties => ({
-    background:bg, color:"white", fontWeight:700, borderRadius:12,
+    background:bg, color:"white", fontWeight:400, borderRadius:12, height: ( LANE_HEIGHT - 4 * GAP ),
     padding:"10px 12px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
     display:"flex", alignItems:"center", justifyContent:"center",
     boxShadow: isDay ? "0 2px 8px rgba(0,0,0,0.10)" : "0 2px 8px rgba(0,0,0,0.25)",
-    fontSize: "1.05em",
+    fontSize: "1.5em",
   });
 
   if (!events) return <section style={cardStyle}>Laster kalender…</section>;
@@ -298,6 +301,7 @@ export default function CalendarCard({
           );
         })}
       </div>
+                <PoweredBy logo={isDay ? googleLogoLight : googleLogoDark} alt="Google logo" />
     </section>
   );
 }
