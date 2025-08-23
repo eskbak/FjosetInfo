@@ -19,7 +19,6 @@
     "start": "concurrently -k \"npm:start:server\" \"npm:preview:frontend\"",
     "predeploy": "npm run build --prefix frontend",
     "deploy": "gh-pages -d frontend/dist"
-    
   },
   "dependencies": {
     "cors": "^2.8.5",
