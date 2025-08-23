@@ -28,7 +28,7 @@ export default function Header({ todayText }: { todayText: string }) {
           whiteSpace: "nowrap",
         }}
       >
-        Test
+        🐮
       </h1>
 
       <h2
