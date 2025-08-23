@@ -110,7 +110,7 @@ const fixtures = useMemo(() => {
               <div style={{ textAlign: "center", marginBottom: 24 }}>
         <h1 style={{ fontSize: "3.0em", fontWeight: 600, margin: 20,
           color: theme.text}}>
-            ⚽ Matchday ⚽
+            ⚽🔥 Matchday 🔥⚽
         </h1>
       </div>
       <div style={wrapStyle}>
