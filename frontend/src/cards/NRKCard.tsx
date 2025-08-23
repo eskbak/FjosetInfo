@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import PoweredBy from "../components/PoweredBy";
 import type { Theme, Colors } from "../types";
-import nrkLogo from "../assets/nrkLogo.png";
+import nrkLogoDark from "../assets/nrkLogoDark.png";
+import nrkLogoLight from "../assets/nrkLogoLight.png";
 
 type Props = {
   theme: Theme;
   colors: Colors;
+  isDay: boolean;
   rotateMs?: number; // default 20000
 };
 
-export default function NRKCard({ theme, colors, rotateMs = 4000 }: Props) {
+export default function NRKCard({ theme, isDay, colors, rotateMs = 20000 }: Props) {
   const [nrk, setNrk] = useState<any>(null);
   const [index, setIndex] = useState(0);
 
@@ -50,7 +52,7 @@ export default function NRKCard({ theme, colors, rotateMs = 4000 }: Props) {
     return (
       <section style={cardStyle}>
         <div style={{ opacity: 0.7, textAlign: "center", fontSize: "3.0em", padding: 40 }}>Laster nyheter…</div>
-        <PoweredBy logo={nrkLogo} alt="NRK logo" />
+          <PoweredBy logo={isDay ? nrkLogoLight : nrkLogoDark} alt="YR logo" />
       </section>
     );
   }
@@ -112,6 +114,7 @@ export default function NRKCard({ theme, colors, rotateMs = 4000 }: Props) {
                 WebkitBoxOrient: "vertical",
                 overflow: "hidden",
                 minHeight: 0,
+                paddingBottom: 15,
               }}
               dangerouslySetInnerHTML={{
                 __html: it.description
@@ -148,7 +151,7 @@ export default function NRKCard({ theme, colors, rotateMs = 4000 }: Props) {
         </div>
       </article>
 
-      <PoweredBy logo={nrkLogo} alt="NRK logo" />
+          <PoweredBy logo={isDay ? nrkLogoLight : nrkLogoDark} alt="YR logo" />
     </section>
   );
 }
