@@ -17,11 +17,7 @@ export default function Header({ todayText }: { todayText: string }) {
         <Clock />
       </div>
 
-      <h1>
-        Sindre
-      </h1>
-
-      {/* Center logo instead of <h1>
+      Center logo instead of <h1>
       <div style={{ justifySelf: "center", lineHeight: 0 }}>
         <img
           src={kua}
@@ -31,7 +27,7 @@ export default function Header({ todayText }: { todayText: string }) {
             display: "block",  // avoid baseline gap
           }}
         />
-      </div> */}
+      </div>
 
       <h2
         style={{
