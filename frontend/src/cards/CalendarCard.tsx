@@ -196,7 +196,7 @@ export default function CalendarCard({
 
   // ---------- styles ----------
   const COL_WIDTH = 150;
-  const LANE_HEIGHT = 120; // thicker bars
+  const LANE_HEIGHT = 250; // thicker bars
   const GAP = 6;
 
   const cardStyle: React.CSSProperties = {
@@ -231,7 +231,7 @@ export default function CalendarCard({
       <div style={headerStyle}>
         <div />
         {days.map(({date})=>(
-          <div key={date.toISOString()} style={{fontWeight:700,textAlign:"center",color:theme.text, fontSize:"1.6em"}}>
+          <div key={date.toISOString()} style={{fontWeight:700,textAlign:"center",color:theme.text, fontSize:"2.0em"}}>
             {fmtDay(date)}
           </div>
         ))}
