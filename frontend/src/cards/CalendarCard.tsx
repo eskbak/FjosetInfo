@@ -196,7 +196,7 @@ export default function CalendarCard({
 
   // ---------- styles ----------
   const COL_WIDTH = 150;
-  const LANE_HEIGHT = 250; // thicker bars
+  const LANE_HEIGHT = 200; // thicker bars
   const GAP = 6;
 
   const cardStyle: React.CSSProperties = {
