@@ -8,7 +8,7 @@ import type { Theme, Colors } from "./types";
 export default function App() {
   // Theme (06–16 day; otherwise night)
   const hour = new Date().getHours();
-  const isDay = hour >= 6 && hour < 20;
+  const isDay = hour >= 6 && hour < 17;
 
   const theme: Theme = isDay
     ? { bg: "#f6f7f9", text: "#0b1220", card: "#ffffff", border: "#e5e7eb" }
