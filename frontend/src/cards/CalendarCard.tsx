@@ -96,7 +96,7 @@ export default function CalendarCard({
           timeMin: windowBounds.timeMin,
           timeMax: windowBounds.timeMax,
           maxResults: "250",          // server forwards to Google; 250 is API max per page
-          singleEvents: "true",       // (your server already sets this, but harmless here)
+          singleEvents: "true",       // (server already sets this, harmless here)
           orderBy: "startTime",
         });
         const r = await fetch(`/api/calendar/upcoming?${params.toString()}`);
@@ -106,7 +106,7 @@ export default function CalendarCard({
                     Array.isArray(data?.events) ? data.events : [];
         if (!alive) return;
 
-        // Optional micro-filter: drop untagged before normalize to save a bit
+        // Optional micro-filter: only tagged (ALLE or exact person)
         const relevant = (raw as Array<IncomingFlat | IncomingNested>).filter(e => {
           const s = (e as any).summary as string | undefined;
           if (!s) return false;
@@ -196,8 +196,8 @@ export default function CalendarCard({
 
   // ---------- styles ----------
   const COL_WIDTH = 150;
-  const LANE_HEIGHT = 200; // thicker bars
-  const GAP = 6;
+  const LANE_HEIGHT = 200; // total height PER PERSON (regardless of number of lanes)
+  const GAP = 16;
 
   const cardStyle: React.CSSProperties = {
     width:"100%", maxWidth: 1000, margin:"0 auto",
@@ -214,12 +214,23 @@ export default function CalendarCard({
     Hallgrim:"#6b7280", Eskil:"#2563eb", Sindre:"#059669",
     Kristian:"#d97706", Niklas:"#db2777", Marius:"#9333ea",
   };
+
+  // Make blocks fill their lane height; row height is handled by gridTemplateRows
   const blockStyle = (bg:string): React.CSSProperties => ({
-    background:bg, color:"white", fontWeight:400, borderRadius:12, height: ( LANE_HEIGHT - 4 * GAP ),
-    padding:"10px 12px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
-    display:"flex", alignItems:"center", justifyContent:"center",
+    background:bg,
+    color:"white",
+    fontWeight:400,
+    borderRadius:12,
+    height:"100%", // important: fill the lane’s computed height
+    padding:"10px 12px",
+    overflow:"hidden",
+    textOverflow:"ellipsis",
+    whiteSpace:"nowrap",
+    display:"flex",
+    alignItems:"center",
+    justifyContent:"center",
     boxShadow: isDay ? "0 2px 8px rgba(0,0,0,0.10)" : "0 2px 8px rgba(0,0,0,0.25)",
-    fontSize: "1.5em",
+    fontSize: "2.0em",
   });
 
   if (!events) return <section style={cardStyle}>Laster kalender…</section>;
@@ -241,14 +252,23 @@ export default function CalendarCard({
       <div style={{ display:"grid" }}>
         {PEOPLE.map((p, pi) => {
           const laneCount = lanesByPerson[p].laneCount;
+
+          // Keep total person row height = LANE_HEIGHT, preserving a GAP between lanes.
+          // perLaneHeight * laneCount + GAP*(laneCount-1) === LANE_HEIGHT
+          const perLaneHeight = Math.max(
+            24, // small minimum so very many lanes don't collapse to 0
+            (LANE_HEIGHT - GAP ) / laneCount
+          );
+
           const rowGrid: React.CSSProperties = {
             display:"grid",
             gridTemplateColumns:`160px repeat(5, ${COL_WIDTH}px)`,
-            gridTemplateRows:`repeat(${laneCount}, ${LANE_HEIGHT}px)`,
+            gridTemplateRows:`repeat(${laneCount}, ${perLaneHeight}px)`,
             columnGap: GAP,
             rowGap: GAP,
             alignItems:"center",
           };
+
           return (
             <div
               key={p}
@@ -266,7 +286,7 @@ export default function CalendarCard({
                     gridRow: `1 / span ${laneCount}`,
                     display:"flex",
                     alignItems:"center",
-                    fontWeight:700,
+                    fontWeight: 600,
                     color: theme.text,
                     fontSize: "1.6em",
                     paddingLeft: 4,
@@ -275,21 +295,24 @@ export default function CalendarCard({
                   {p}
                 </div>
 
-                {/* Invisible slots to define grid */}
+                {/* Invisible slots to define grid cells for 5 day columns across all lanes */}
                 {Array.from({ length: laneCount }).map((_, lane) =>
                   days.map((_, col) => (
-                    <div key={`slot-${p}-${lane}-${col}`} style={{ gridColumn: `${col+2} / span 1`, gridRow: `${lane+1} / span 1` }} />
+                    <div
+                      key={`slot-${p}-${lane}-${col}`}
+                      style={{ gridColumn: `${col+2} / span 1`, gridRow: `${lane+1} / span 1` }}
+                    />
                   ))
                 )}
 
-                {/* Event blocks spanning columns */}
+                {/* Event blocks spanning the correct day columns; each fills its lane height */}
                 {lanesByPerson[p].lanes.flat().map(ev => (
                   <div
                     key={ev.id}
                     style={{
                       ...blockStyle(personAccent[p]),
                       gridRow: `${ev.lane + 1} / span 1`,
-                      gridColumn: `${ev.startIdx + 2} / span ${ev.span}`, // +2 skips name column
+                      gridColumn: `${ev.startIdx + 2} / span ${ev.span}`, // +2 skips the name column
                     }}
                     title={ev.title}
                   >
@@ -301,7 +324,8 @@ export default function CalendarCard({
           );
         })}
       </div>
-                <PoweredBy logo={isDay ? googleLogoLight : googleLogoDark} alt="Google logo" />
+
+      <PoweredBy logo={isDay ? googleLogoLight : googleLogoDark} alt="Google logo" />
     </section>
   );
 }
