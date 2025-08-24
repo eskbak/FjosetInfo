@@ -18,7 +18,7 @@ export default function DashboardView({
   return (
     <main style={{ display: "flex", flexDirection: "column", flex: 1, gap: 20, marginTop: 20 }}>
       <AtBCard theme={theme} colors={colors} isDay={isDay} stopPlaceId={STOP_PLACE_ID} />
-      <YRCard  theme={theme} colors={colors} isDay={isDay} lat={LAT} lon={LON} hours={6} />
+      <YRCard  theme={theme} colors={colors} isDay={isDay} lat={LAT} lon={LON} hours={4} />
     </main>
   );
 }

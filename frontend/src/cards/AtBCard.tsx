@@ -79,7 +79,7 @@ export default function AtBCard({ theme, isDay, stopPlaceId, maxRows = 5 }: Prop
   style={{
     padding: "0.4em 0.3em",
     paddingLeft: 35,
-    fontSize: "2.8em",
+    fontSize: "3.5em",
     fontWeight: 400,
     whiteSpace: "nowrap",
     overflow: "hidden",
@@ -90,10 +90,10 @@ export default function AtBCard({ theme, isDay, stopPlaceId, maxRows = 5 }: Prop
   {d.destination}
 </td>
 
-                  <td style={{ padding: "0.4em 0.3em", fontSize: "2.8em", fontVariantNumeric: "tabular-nums", fontWeight: 400 }}>
+                  <td style={{ padding: "0.4em 0.3em", fontSize: "3.5em", fontVariantNumeric: "tabular-nums", fontWeight: 400 }}>
                     {d.expected ? format(parseISO(d.expected), "HH:mm") : "—"}
                   </td>
-                  <td style={{ padding: "0.4em 0.3em", fontSize: "2.8em", textAlign: "right", fontWeight: 400, paddingRight: 60 }}>
+                  <td style={{ padding: "0.4em 0.3em", fontSize: "3.5em", textAlign: "right", fontWeight: 400, paddingRight: 60 }}>
                     {d.inMin !== null ? `${d.inMin} min` : "—"}
                   </td>
                 </tr>

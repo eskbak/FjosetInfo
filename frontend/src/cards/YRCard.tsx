@@ -101,18 +101,18 @@ export default function YRCard({ theme, isDay, lat, lon, hours = 5 }: Props) {
                     <td style={{ padding: "0.4em 0.5em", paddingLeft: 30, fontSize: "2.8em", fontWeight: 400 }}>
                       {h.time}
                     </td>
-                    <td style={{ padding: "0.4em 0.5em", fontSize: "2.8em" }}>{symbolToEmoji(h.symbol)}</td>
-                    <td style={{ padding: "0.4em 0.5em", fontSize: "2.8em" }}>
+                    <td style={{ padding: "0.4em 0.5em", fontSize: "3.5em" }}>{symbolToEmoji(h.symbol)}</td>
+                    <td style={{ padding: "0.4em 0.5em", fontSize: "3.5em" }}>
                       {h.temp ?? "—"}°
                     </td>
-                    <td style={{ padding: "0.4em 0.5em", fontSize: "2.8em", color: "#046dc9ff", paddingLeft: 40 }}>
+                    <td style={{ padding: "0.4em 0.5em", fontSize: "3.5em", color: "#046dc9ff", paddingLeft: 40 }}>
                       {renderPrecip(h)}
                     </td>
                     <td
                       style={{
                         padding: "0.4em 0.5em",
                         paddingRight: 44,
-                        fontSize: "2.8em",
+                        fontSize: "3.5em",
                         display: "flex",
                         alignItems: "center",
                         gap: 12,
