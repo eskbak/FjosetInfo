@@ -17,7 +17,6 @@ export default function Header({ todayText }: { todayText: string }) {
         <Clock />
       </div>
 
-      Center logo instead of <h1>
       <div style={{ justifySelf: "center", lineHeight: 0 }}>
         <img
           src={kua}
