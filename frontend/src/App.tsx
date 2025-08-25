@@ -1,14 +1,32 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Header from "./components/Header";
 import DashboardView from "./views/DashboardView";
 import NewsView from "./views/NewsView";
 import CalendarView from "./views/CalendarView";
 import type { Theme, Colors } from "./types";
+import ArrivalOverlay from "./components/ArrivalOverlay";
 
 export default function App() {
+  // --- Arrival overlay state ---
+  const [arrivalName, setArrivalName] = useState<string | null>(null);
+
+  // poll presence
+  const POLL_MS = 10_000;
+
+  // remember current present set and "first fetch" baseline to avoid firing on load
+  const lastPresentRef = useRef<Set<string>>(new Set());
+  const baselineDoneRef = useRef(false);
+
+  // queue multiple arrivals that happen close together
+  const queueRef = useRef<string[]>([]);
+
+  // simple cooldown to avoid repeated alerts for the same person (5 minutes)
+  const lastAnnouncedAtRef = useRef<Map<string, number>>(new Map());
+  const ANNOUNCE_COOLDOWN_MS = 5 * 60 * 1000;
+
   // Theme (06–16 day; otherwise night)
   const hour = new Date().getHours();
-  const isDay = hour >= 6 && hour < 17;
+  const isDay = hour >= 6 && hour < 18;
 
   const theme: Theme = isDay
     ? { bg: "#f6f7f9", text: "#0b1220", card: "#ffffff", border: "#e5e7eb" }
@@ -16,7 +34,7 @@ export default function App() {
 
   const COLORS: Colors = {
     ATB: { primary: "#78BE20", dark: "#028300ff" },
-    YR:  { primary: "#0053A5", light: "#E6F0FA" },
+    YR: { primary: "#0053A5", light: "#E6F0FA" },
     NRK: { primary: "#3600e6ff", dark: "#870000" },
   };
 
@@ -40,7 +58,7 @@ export default function App() {
     const fmt = new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "short" });
     return fmt
       .formatToParts(d)
-      .map(p => (p.type === "month" ? p.value.replace(/\.$/, "") : p.value))
+      .map((p) => (p.type === "month" ? p.value.replace(/\.$/, "") : p.value))
       .join("");
   }, []);
 
@@ -58,30 +76,96 @@ export default function App() {
     return async (name: ViewKey) => {
       try {
         if (name === "news") {
-          // warm NRK feed
-          await fetch("/api/nrk/latest"); // server should set Cache-Control; default cache mode is fine
+          await fetch("/api/nrk/latest");
         } else if (name === "calendar") {
-          // warm 5-day window
-          const start = new Date(); start.setHours(0, 0, 0, 0);
-          const end = new Date(start); end.setDate(end.getDate() + 4); end.setHours(23, 59, 59, 999);
-          const qs = new URLSearchParams({ timeMin: start.toISOString(), timeMax: end.toISOString() });
+          const start = new Date();
+          start.setHours(0, 0, 0, 0);
+          const end = new Date(start);
+          end.setDate(end.getDate() + 4);
+          end.setHours(23, 59, 59, 999);
+          const qs = new URLSearchParams({
+            timeMin: start.toISOString(),
+            timeMax: end.toISOString(),
+          });
           await fetch(`/api/calendar/upcoming?${qs.toString()}`);
         } else if (name === "dashboard") {
-          // TODO: add your dashboard prefetches if any (e.g. YR/ATB)
-          // Example:
+          // e.g. warm YR/ATB if desired
           // await fetch("/api/yr/today?lat=...&lon=...&hours=6");
           // await fetch("/api/entur/departures?stopPlaceId=...&max=...");
         }
-
-        // (Optional) pre-warm view code chunk if you code-split with React.lazy later:
-        // if (name === "news") import("./views/NewsView");
-        // if (name === "calendar") import("./views/CalendarView");
-        // ...
       } catch {
         // ignore prefetch errors – real render will retry
       }
     };
   }, []);
+
+  // presence polling -> queue new arrivals
+  useEffect(() => {
+    const tick = async () => {
+      try {
+        const r = await fetch("/api/presence", { cache: "no-store" });
+        const j = await r.json();
+        const present: string[] = Array.isArray(j.present) ? j.present : [];
+        const cur = new Set(present);
+
+        if (!baselineDoneRef.current) {
+          // first fetch: set baseline, don't alert existing people
+          lastPresentRef.current = cur;
+          baselineDoneRef.current = true;
+          return;
+        }
+
+        // find newly present vs the previous poll
+        const prev = lastPresentRef.current;
+        const added = present.filter((p) => !prev.has(p));
+
+        // enqueue with cooldown
+        const now = Date.now();
+        for (const name of added) {
+          const lastAt = lastAnnouncedAtRef.current.get(name) || 0;
+          if (now - lastAt >= ANNOUNCE_COOLDOWN_MS) {
+            queueRef.current.push(name);
+            lastAnnouncedAtRef.current.set(name, now);
+          }
+        }
+
+        lastPresentRef.current = cur;
+
+        // if nothing showing, pop next
+        if (!arrivalName && queueRef.current.length > 0) {
+          setArrivalName(queueRef.current.shift() || null);
+        }
+      } catch {
+        // ignore; try again on next poll
+      }
+    };
+
+    // initial + interval
+    tick();
+    const id = window.setInterval(tick, POLL_MS);
+    return () => clearInterval(id);
+  }, [arrivalName]);
+
+  const handleArrivalClosed = () => {
+    // slight gap before next (feels nicer)
+    setArrivalName(null);
+    setTimeout(() => {
+      if (queueRef.current.length > 0) {
+        setArrivalName(queueRef.current.shift() || null);
+      }
+    }, 300);
+  };
+
+  // dev helper to trigger overlay manually
+  const triggerArrival = (name: string) => {
+    if (!name) return;
+    if (arrivalName) {
+      queueRef.current.push(name);
+    } else {
+      setArrivalName(name);
+    }
+    lastAnnouncedAtRef.current.set(name, Date.now());
+  };
 
   useEffect(() => {
     let rotateId: number;
@@ -94,13 +178,18 @@ export default function App() {
     const doPrefetch = () => {
       if ("requestIdleCallback" in window) {
         // @ts-ignore
-        idleId = window.requestIdleCallback(() => prefetchFor(nextView), { timeout: PRELOAD_MS });
+        idleId = window.requestIdleCallback(() => prefetchFor(nextView), {
+          timeout: PRELOAD_MS,
+        });
       } else {
         prefetchFor(nextView);
       }
     };
 
-    preloadId = window.setTimeout(doPrefetch, Math.max(0, ROTATE_MS - PRELOAD_MS));
+    preloadId = window.setTimeout(
+      doPrefetch,
+      Math.max(0, ROTATE_MS - PRELOAD_MS)
+    );
     rotateId = window.setTimeout(() => setView(nextView), ROTATE_MS);
 
     return () => {
@@ -123,6 +212,11 @@ export default function App() {
       )}
       {view === "calendar" && (
         <CalendarView theme={theme} colors={COLORS} isDay={isDay} />
+      )}
+
+      {/* Arrival overlay (full-screen) */}
+      {arrivalName && (
+        <ArrivalOverlay name={arrivalName} onClose={handleArrivalClosed} />
       )}
 
       {/* dev view switcher */}
@@ -174,6 +268,22 @@ export default function App() {
           }}
         >
           Calendar
+        </button>
+        <button
+          onClick={() => {
+            const n = prompt("Who arrived?", "Testperson") || "";
+            triggerArrival(n.trim());
+          }}
+          style={{
+            padding: "6px 10px",
+            borderRadius: 10,
+            border: `1px solid ${theme.border}`,
+            background: theme.card,
+            color: theme.text,
+            cursor: "pointer",
+          }}
+        >
+          Test arrival
         </button>
       </div>
     </div>

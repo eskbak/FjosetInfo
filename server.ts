@@ -2,6 +2,8 @@ import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
+import fs from "fs";
+import { execSync } from "child_process";
 
 // ---------------- Types ----------------
 type EnturDeparture = {
@@ -50,28 +52,6 @@ type YRCompact = {
   };
 };
 
-type TeamKey = "Arsenal" | "Manchester United";
-
-type MatchdayFixture = {
-  team: TeamKey;
-  utcDate: string;                 // ISO
-  opponent: string;
-  home: boolean;
-  competition?: string | null;
-  status?: string | null;          // SCHEDULED | IN_PLAY | LIVE | FINISHED | POSTPONED...
-  venue?: string | null;
-  score?: { home?: number | null; away?: number | null };
-
-  // NEW: crest URLs (raw from football-data)
-  teamCrest?: string | null;
-  opponentCrest?: string | null;
-};
-
-const TEAMS = [
-  { label: "Arsenal" as TeamKey,            id: 57,  homeStadium: "Emirates Stadium" },
-  { label: "Manchester United" as TeamKey,  id: 66,  homeStadium: "Old Trafford" },
-];
-
 const app = express();
 app.use(cors());
 
@@ -79,6 +59,50 @@ const PORT = Number(process.env.PORT || 8787);
 const ET_CLIENT_NAME = process.env.ET_CLIENT_NAME || 'pi-infoscreen/0.1 (example@example.com)';
 const MET_USER_AGENT = process.env.MET_USER_AGENT || 'pi-infoscreen/0.1 (example@example.com)';
 const NRK_RSS_URL = process.env.NRK_RSS_URL || 'https://www.nrk.no/nyheter/siste.rss';
+const PRESENCE_MODE = process.env.PRESENCE_MODE || "auto"; // "arp" | "beacon" | "auto"
+const PRESENCE_TTL_SEC = Number(process.env.PRESENCE_TTL_SEC || 600); // 10 minutes
+const BEACON_SECRET = process.env.PRESENCE_BEACON_SECRET || ""; // required for beacon writes
+const PRESENCE_SCAN_INTERVAL_SEC = Number(process.env.PRESENCE_SCAN_INTERVAL_SEC || 10);
+type KnownDevice = { name: string; macs?: string[]; ips?: string[] };
+const KNOWN_DEVICES: KnownDevice[] = (() => {
+  try {
+    const raw = process.env.KNOWN_DEVICES || "[]";
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+})();
+
+let lastArpRows: Array<{ ip: string; mac: string }> = [];
+function scanArp() { lastArpRows = readArp(); }
+scanArp();
+setInterval(scanArp, PRESENCE_SCAN_INTERVAL_SEC * 1000);
+
+function readArp(): Array<{ ip: string; mac: string }> {
+  // Linux: /proc/net/arp
+  try {
+    const txt = fs.readFileSync("/proc/net/arp", "utf8");
+    const lines = txt.trim().split("\n").slice(1);
+    const rows = lines
+      .map((l) => l.trim().split(/\s+/))
+      .map(([ip, _hwtype, _flags, mac]) => ({ ip, mac: (mac || "").toLowerCase() }))
+      .filter((r) => r.mac && r.mac !== "00:00:00:00:00:00");
+    return rows;
+  } catch {
+    // Fallback: `arp -an`
+    try {
+      const out = execSync("arp -an", { timeout: 1500 }).toString();
+      const rows = [...out.matchAll(/\(([^)]+)\)\s+at\s+([0-9a-f:]+)/gi)].map((m) => ({
+        ip: m[1],
+        mac: m[2].toLowerCase(),
+      }));
+      return rows;
+    } catch {
+      return [];
+    }
+  }
+}
 
 // --- Entur / AtB departures (filtered to publicCode=25)
 app.get('/api/entur/departures', async (req: Request, res: Response) => {
@@ -440,143 +464,64 @@ app.get("/api/calendar/upcoming", async (req: ExpressRequest, res: ExpressRespon
   }
 });
 
+// ---- Presence service -------------------------------------------------------
+const lastSeen = new Map<string, number>(); // for beacon mode
 
+function computePresence() {
+  const now = Date.now();
+  const seenVia: Record<string, "arp" | "beacon"> = {};
+  const present = new Set<string>();
 
-app.get("/api/matchday/today", async (req: Request, res: Response) => {
-
-    console.log("FOOTBALL_DATA_TOKEN:", process.env.FOOTBALL_DATA_TOKEN);
-
-  try {
-    const token = process.env.FOOTBALL_DATA_TOKEN || "";
-
-    // Get today's date in UTC
-    const now = new Date();
-    const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const todayStr = todayUTC.toISOString().slice(0, 10); // "YYYY-MM-DD"
-    
-
-    const out: MatchdayFixture[] = [];
-
-    if (token) {
-      const headers = { "X-Auth-Token": token };
-      for (const t of TEAMS) {
-        try {
-          const url = `https://api.football-data.org/v4/teams/${t.id}/matches?dateFrom=${todayStr}&dateTo=${todayStr}`;
-          const r = await fetch(url, { headers });
-          if (!r.ok) throw new Error(`fd.org ${t.label}: ${r.status}`);
-          const j = await r.json();
-
-          const matches: any[] = j?.matches ?? [];
-          for (const m of matches) {
-            // Only compare the date part in UTC
-            if (!m.utcDate || m.utcDate.slice(0, 10) !== todayStr) continue;
-
-            const homeName = m.homeTeam?.name || "Home";
-            const awayName = m.awayTeam?.name || "Away";
-            const teamIsHome = homeName.toLowerCase().includes(t.label.toLowerCase());
-
-            const oppName = teamIsHome ? awayName : homeName;
-
-            // crests direct from football-data.org (may be svg/png)
-            const homeCrest: string | null = m.homeTeam?.crest ?? null;
-            const awayCrest: string | null = m.awayTeam?.crest ?? null;
-
-            const venue = (m.venue as string | undefined) || (teamIsHome ? t.homeStadium : null);
-
-            const score = m.score?.fullTime
-              ? {
-                  home: typeof m.score.fullTime.home === "number" ? m.score.fullTime.home : null,
-                  away: typeof m.score.fullTime.away === "number" ? m.score.fullTime.away : null,
-                }
-              : { home: null, away: null };
-
-            out.push({
-              team: t.label,
-              utcDate: m.utcDate,
-              opponent: oppName,
-              home: teamIsHome,
-              competition: m.competition?.name ?? null,
-              status: m.status ?? null,
-              venue: venue ?? null,
-              score,
-              teamCrest: teamIsHome ? homeCrest : awayCrest,
-              opponentCrest: teamIsHome ? awayCrest : homeCrest,
-            });
-          }
-        } catch {
-          // continue on per-team failure
-        }
+  // ARP scan (home Wi-Fi)
+  if (PRESENCE_MODE === "arp" || PRESENCE_MODE === "auto") {
+  const arp = lastArpRows;
+    const arpMacs = new Set(arp.map((r) => r.mac));
+    const arpIps = new Set(arp.map((r) => r.ip));
+    for (const d of KNOWN_DEVICES) {
+      const macHit = (d.macs || []).some((m) => arpMacs.has(m.toLowerCase()));
+      const ipHit = (d.ips || []).some((ip) => arpIps.has(ip));
+      if (macHit || ipHit) {
+        present.add(d.name);
+        seenVia[d.name] = "arp";
       }
-    } else {
-      // Fallback mock (no crests if no token)
-      out.push(
-        {
-          team: "Arsenal",
-          utcDate: `${todayStr}T16:30:00Z`,
-          opponent: "Chelsea",
-          home: true,
-          competition: "Premier League",
-          status: "SCHEDULED",
-          venue: "Emirates Stadium",
-          score: { home: null, away: null },
-          teamCrest: null,
-          opponentCrest: null,
-        },
-        {
-          team: "Manchester United",
-          utcDate: `${todayStr}T19:00:00Z`,
-          opponent: "Liverpool",
-          home: false,
-          competition: "Premier League",
-          status: "SCHEDULED",
-          venue: null,
-          score: { home: null, away: null },
-          teamCrest: null,
-          opponentCrest: null,
-        }
-      );
     }
-
-    // Only keep fixtures for today (UTC)
-    const fixturesToday = out.filter(f => f.utcDate.slice(0, 10) === todayStr)
-      .sort((a, b) => a.utcDate.localeCompare(b.utcDate));
-
-    return res.json({
-      date: todayStr,
-      hasMatches: fixturesToday.length > 0,
-      fixtures: fixturesToday,
-      source: token ? "football-data.org" : "mock",
-    });
-  } catch (e: any) {
-    return res.status(500).json({ error: e?.message || "Matchday error" });
   }
+
+  // Beacon (hotspot/dev)
+  if (PRESENCE_MODE === "beacon" || PRESENCE_MODE === "auto") {
+    for (const [name, ts] of lastSeen) {
+      if (now - ts <= PRESENCE_TTL_SEC * 1000) {
+        if (!present.has(name)) seenVia[name] = "beacon";
+        present.add(name);
+      }
+    }
+  }
+
+  return {
+    present: [...present].sort(),
+    seenVia,
+    mode: PRESENCE_MODE,
+    known: KNOWN_DEVICES.map((d) => d.name).sort(),
+    serverTime: new Date().toISOString(),
+  };
+}
+
+// GET who is home right now
+app.get("/api/presence", (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json(computePresence());
 });
 
-// ---- Crest Proxy -----------------------------------------------------------
-app.get("/api/crest", async (req: Request, res: Response) => {
-  try {
-    const raw = String(req.query.url || "");
-    if (!raw) return res.status(400).send("Missing url");
+// DEV: beacon from a phone (bookmark this URL on the device)
+// Example: GET /api/presence/beacon?name=Eskil&key=YOURSECRET
+app.get("/api/presence/beacon", (req, res) => {
+  const name = String(req.query.name || "").trim();
+  const key = String(req.query.key || "");
+  if (!name) return res.status(400).json({ error: "Missing name" });
+  if (!BEACON_SECRET || key !== BEACON_SECRET) return res.status(403).json({ error: "Forbidden" });
 
-    // Very simple allow-list (football-data.org, upload.wikimedia.org, etc.)
-    const allowed = ["crests.football-data.org", "upload.wikimedia.org"];
-    const u = new URL(raw);
-    if (!allowed.includes(u.hostname)) {
-      return res.status(400).send("Domain not allowed");
-    }
-
-    const r = await fetch(raw);
-    if (!r.ok) {
-      return res.status(r.status).send("Upstream crest fetch failed");
-    }
-    const ct = r.headers.get("content-type") || "image/svg+xml";
-    res.setHeader("Content-Type", ct);
-    res.setHeader("Cache-Control", "public, max-age=86400"); // 1 day
-    const buf = Buffer.from(await r.arrayBuffer());
-    return res.send(buf);
-  } catch (e: any) {
-    return res.status(500).send(e?.message || "Crest proxy error");
-  }
+  lastSeen.set(name, Date.now());
+  res.json({ ok: true, name, ttlSec: PRESENCE_TTL_SEC, at: new Date().toISOString() });
 });
 
 app.listen(PORT, () => {
