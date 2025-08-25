@@ -4,6 +4,8 @@ import cors from 'cors';
 import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
 import fs from "fs";
 import { execSync } from "child_process";
+import path from "path";
+import { fileURLToPath } from "url";
 
 // ---------------- Types ----------------
 type EnturDeparture = {
@@ -54,6 +56,7 @@ type YRCompact = {
 
 const app = express();
 app.use(cors());
+app.use(express.json({ limit: "1mb" }));
 
 const PORT = Number(process.env.PORT || 8787);
 const ET_CLIENT_NAME = process.env.ET_CLIENT_NAME || 'pi-infoscreen/0.1 (example@example.com)';
@@ -541,15 +544,96 @@ app.get("/api/overlays", (_req, res) => {
   }
 });
 
+// Optional: allow editing overlays.json from Admin
+app.put("/api/overlays", (req, res) => {
+  try {
+    const overlays = Array.isArray(req.body?.overlays) ? req.body.overlays : [];
+    for (const o of overlays) {
+      if (typeof o.id !== "string" || typeof o.type !== "string") {
+        return res.status(400).json({ ok: false, error: "Each overlay needs id and type" });
+      }
+    }
+    writeJsonAtomic(OVERLAYS_FILE, { overlays }); // OVERLAYS_FILE is defined in your server
+    res.json({ ok: true, count: overlays.length });
+  } catch (e: any) {
+    res.status(400).json({ ok: false, error: e?.message || "Overlays write failed" });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Proxy listening on http://localhost:${PORT}`);
 });
 
 // ---- place this AT THE VERY BOTTOM, after every /api route ----
-import path from "path";
-import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.join(__dirname, "frontend", "dist");
+
+// ---- Settings API -----------------------------------------------------------
+const SETTINGS_FILE = process.env.SETTINGS_FILE
+  ? path.resolve(process.cwd(), process.env.SETTINGS_FILE)
+  : path.join(__dirname2, "settings.json");
+
+const DEFAULT_SETTINGS = {
+  viewsEnabled: { dashboard: true, news: true, calendar: true },
+  dayHours: { start: 6, end: 18 },   // local hours where UI is considered "day"
+  calendarDaysAhead: 4,
+  rotateSeconds: 45,
+};
+
+function readJsonSafe(file: string, fallback: any) {
+  try {
+    if (!fs.existsSync(file)) return fallback;
+    const raw = fs.readFileSync(file, "utf8");
+    const j = JSON.parse(raw);
+    return j ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJsonAtomic(file: string, data: any) {
+  const tmp = `${file}.tmp-${Date.now()}`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), "utf8");
+  fs.renameSync(tmp, file);
+}
+
+// GET current settings
+app.get("/api/settings", (_req, res) => {
+  const s = readJsonSafe(SETTINGS_FILE, DEFAULT_SETTINGS);
+  res.setHeader("Cache-Control", "no-store");
+  res.json(s);
+});
+
+// PUT update settings
+app.put("/api/settings", (req, res) => {
+  try {
+    const body = req.body || {};
+    const v = body.viewsEnabled ?? {};
+    const next = {
+      viewsEnabled: {
+        dashboard: !!v.dashboard,
+        news: !!v.news,
+        calendar: !!v.calendar,
+      },
+      dayHours: {
+        start: clampInt(body?.dayHours?.start, 0, 23, DEFAULT_SETTINGS.dayHours.start),
+        end:   clampInt(body?.dayHours?.end,   1, 24, DEFAULT_SETTINGS.dayHours.end),
+      },
+      calendarDaysAhead: clampInt(body.calendarDaysAhead, 0, 14, DEFAULT_SETTINGS.calendarDaysAhead),
+      rotateSeconds:     clampInt(body.rotateSeconds,     5, 600, DEFAULT_SETTINGS.rotateSeconds),
+    };
+    writeJsonAtomic(SETTINGS_FILE, next);
+    res.json({ ok: true, settings: next });
+  } catch (e: any) {
+    res.status(400).json({ ok: false, error: e?.message || "Invalid settings" });
+  }
+});
+
+function clampInt(v: any, min: number, max: number, d: number) {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : d;
+}
+
 
 // serve built assets
 app.use(express.static(distDir));

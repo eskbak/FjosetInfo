@@ -3,11 +3,15 @@ import Header from "./components/Header";
 import DashboardView from "./views/DashboardView";
 import NewsView from "./views/NewsView";
 import CalendarView from "./views/CalendarView";
-import type { Theme, Colors } from "./types";
-import ArrivalOverlay from "./components/ArrivalOverlay";
+import AdminView from "./views/AdminView";
 import GlobalOverlays from "./components/GlobalOverlays";
+import ArrivalOverlay from "./components/ArrivalOverlay";
+import type { Theme, Colors } from "./types";
+import { useSettings } from "./state/SettingsContext";
 
 export default function App() {
+  const { settings } = useSettings();
+
   // --- Arrival overlay state ---
   const [arrivalName, setArrivalName] = useState<string | null>(null);
 
@@ -25,9 +29,12 @@ export default function App() {
   const lastAnnouncedAtRef = useRef<Map<string, number>>(new Map());
   const ANNOUNCE_COOLDOWN_MS = 5 * 60 * 1000;
 
-  // Theme (06–16 day; otherwise night)
-  const hour = new Date().getHours();
-  const isDay = hour >= 6 && hour < 18;
+  // ---- theme / day-night based on settings.dayHours ----
+  const localHour = new Date().getHours();
+  const isDay =
+    settings.dayHours.start <= settings.dayHours.end
+      ? localHour >= settings.dayHours.start && localHour < settings.dayHours.end
+      : localHour >= settings.dayHours.start || localHour < settings.dayHours.end; // handles overnight windows
 
   const theme: Theme = isDay
     ? { bg: "#f6f7f9", text: "#0b1220", card: "#ffffff", border: "#e5e7eb" }
@@ -35,7 +42,7 @@ export default function App() {
 
   const COLORS: Colors = {
     ATB: { primary: "#78BE20", dark: "#028300ff" },
-    YR: { primary: "#0053A5", light: "#E6F0FA" },
+    YR:  { primary: "#0053A5", light: "#E6F0FA" },
     NRK: { primary: "#3600e6ff", dark: "#870000" },
   };
 
@@ -50,7 +57,6 @@ export default function App() {
     flexDirection: "column",
     padding: 24,
     boxSizing: "border-box",
-    // tiny stability hint during switches
     willChange: "opacity",
   };
 
@@ -59,38 +65,39 @@ export default function App() {
     const fmt = new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "short" });
     return fmt
       .formatToParts(d)
-      .map((p) => (p.type === "month" ? p.value.replace(/\.$/, "") : p.value))
+      .map(p => (p.type === "month" ? p.value.replace(/\.$/, "") : p.value))
       .join("");
   }, []);
 
   // ---- rotation + prefetch (no hidden mounting) ----
-  type ViewKey = "dashboard" | "news" | "calendar";
-  const ORDER: ViewKey[] = ["dashboard", "news", "calendar"];
+  type ViewKey = "dashboard" | "news" | "calendar" | "admin";
+  const ORDER: ViewKey[] = ([
+    settings.viewsEnabled.dashboard && "dashboard",
+    settings.viewsEnabled.news && "news",
+    settings.viewsEnabled.calendar && "calendar",
+  ].filter(Boolean) as ViewKey[]);
 
-  const ROTATE_MS = 45_000;
-  const PRELOAD_MS = 5_000; // start warming ~5s before switch
+  const ROTATE_MS = Math.max(5, settings.rotateSeconds) * 1000;
+  const PRELOAD_MS = 5_000; // start warming right before switch
 
-  const [view, setView] = useState<ViewKey>("dashboard");
+  const [view, setView] = useState<ViewKey>(ORDER[0] ?? "dashboard");
 
   // helper: warm network/code for a view
   const prefetchFor = useMemo(() => {
     return async (name: ViewKey) => {
       try {
         if (name === "news") {
-          await fetch("/api/nrk/latest");
+          await fetch("/api/nrk/latest"); // server should set Cache-Control
         } else if (name === "calendar") {
-          const start = new Date();
-          start.setHours(0, 0, 0, 0);
+          // warm N-day window per settings
+          const start = new Date(); start.setHours(0, 0, 0, 0);
           const end = new Date(start);
-          end.setDate(end.getDate() + 4);
+          end.setDate(end.getDate() + Math.max(0, settings.calendarDaysAhead));
           end.setHours(23, 59, 59, 999);
-          const qs = new URLSearchParams({
-            timeMin: start.toISOString(),
-            timeMax: end.toISOString(),
-          });
+          const qs = new URLSearchParams({ timeMin: start.toISOString(), timeMax: end.toISOString() });
           await fetch(`/api/calendar/upcoming?${qs.toString()}`);
         } else if (name === "dashboard") {
-          // e.g. warm YR/ATB if desired
+          // add dashboard prefetches if desired
           // await fetch("/api/yr/today?lat=...&lon=...&hours=6");
           // await fetch("/api/entur/departures?stopPlaceId=...&max=...");
         }
@@ -98,7 +105,41 @@ export default function App() {
         // ignore prefetch errors – real render will retry
       }
     };
-  }, []);
+  }, [settings.calendarDaysAhead]);
+
+  useEffect(() => {
+    // if all views toggled off, don't rotate; keep whatever view is set (e.g., admin)
+    if (ORDER.length === 0) return;
+
+    let rotateId: number;
+    let preloadId: number;
+    let idleId: number | undefined;
+
+    const curIdx = Math.max(0, ORDER.indexOf(view));
+    const nextView = ORDER[(curIdx + 1) % ORDER.length];
+
+    const doPrefetch = () => {
+      if ("requestIdleCallback" in window) {
+        // @ts-ignore
+        idleId = window.requestIdleCallback(() => prefetchFor(nextView), { timeout: PRELOAD_MS });
+      } else {
+        prefetchFor(nextView);
+      }
+    };
+
+    preloadId = window.setTimeout(doPrefetch, Math.max(0, ROTATE_MS - PRELOAD_MS));
+    rotateId = window.setTimeout(() => {
+      // if we navigated to admin manually, don't force-rotate
+      if (view !== "admin") setView(nextView);
+    }, ROTATE_MS);
+
+    return () => {
+      clearTimeout(preloadId);
+      clearTimeout(rotateId);
+      // @ts-ignore
+      if (idleId && "cancelIdleCallback" in window) window.cancelIdleCallback(idleId);
+    };
+  }, [view, prefetchFor, ORDER, ROTATE_MS]);
 
   // presence polling -> queue new arrivals
   useEffect(() => {
@@ -110,13 +151,12 @@ export default function App() {
         const cur = new Set(present);
 
         if (!baselineDoneRef.current) {
-          // first fetch: set baseline, don't alert existing people
-          lastPresentRef.current = cur;
+          lastPresentRef.current = cur;      // don't alert for those already home
           baselineDoneRef.current = true;
           return;
         }
 
-        // find newly present vs the previous poll
+        // find newly present vs previous poll
         const prev = lastPresentRef.current;
         const added = present.filter((p) => !prev.has(p));
 
@@ -148,7 +188,6 @@ export default function App() {
   }, [arrivalName]);
 
   const handleArrivalClosed = () => {
-    // slight gap before next (feels nicer)
     setArrivalName(null);
     setTimeout(() => {
       if (queueRef.current.length > 0) {
@@ -168,60 +207,29 @@ export default function App() {
     lastAnnouncedAtRef.current.set(name, Date.now());
   };
 
-  useEffect(() => {
-    let rotateId: number;
-    let preloadId: number;
-    let idleId: number | undefined;
-
-    const curIdx = ORDER.indexOf(view);
-    const nextView = ORDER[(curIdx + 1) % ORDER.length];
-
-    const doPrefetch = () => {
-      if ("requestIdleCallback" in window) {
-        // @ts-ignore
-        idleId = window.requestIdleCallback(() => prefetchFor(nextView), {
-          timeout: PRELOAD_MS,
-        });
-      } else {
-        prefetchFor(nextView);
-      }
-    };
-
-    preloadId = window.setTimeout(
-      doPrefetch,
-      Math.max(0, ROTATE_MS - PRELOAD_MS)
-    );
-    rotateId = window.setTimeout(() => setView(nextView), ROTATE_MS);
-
-    return () => {
-      clearTimeout(preloadId);
-      clearTimeout(rotateId);
-      // @ts-ignore
-      if (idleId && "cancelIdleCallback" in window) window.cancelIdleCallback(idleId);
-    };
-  }, [view, prefetchFor]);
-
   return (
     <div style={pageStyle}>
       <Header todayText={todayNo} />
 
-            {/* overlays visible across all views */}
+      {/* overlays visible across all views */}
       <GlobalOverlays />
 
-      {view === "dashboard" && (
-        <DashboardView theme={theme} colors={COLORS} isDay={isDay} />
-      )}
-      {view === "news" && (
-        <NewsView theme={theme} colors={COLORS} isDay={isDay} />
-      )}
+      {/* Rotating views */}
+      {view === "dashboard" && <DashboardView theme={theme} colors={COLORS} isDay={isDay} />}
+      {view === "news" && <NewsView theme={theme} colors={COLORS} isDay={isDay} />}
       {view === "calendar" && (
-        <CalendarView theme={theme} colors={COLORS} isDay={isDay} />
+        <CalendarView
+          theme={theme}
+          colors={COLORS}
+          isDay={isDay}
+        />
       )}
 
+      {/* Admin (not part of auto-rotation) */}
+      {view === "admin" && <AdminView />}
+
       {/* Arrival overlay (full-screen) */}
-      {arrivalName && (
-        <ArrivalOverlay name={arrivalName} onClose={handleArrivalClosed} />
-      )}
+      {arrivalName && <ArrivalOverlay name={arrivalName} onClose={handleArrivalClosed} />}
 
       {/* dev view switcher */}
       <div
@@ -272,6 +280,19 @@ export default function App() {
           }}
         >
           Calendar
+        </button>
+        <button
+          onClick={() => setView("admin")}
+          style={{
+            padding: "6px 10px",
+            borderRadius: 10,
+            border: `1px solid ${theme.border}`,
+            background: theme.card,
+            color: theme.text,
+            cursor: "pointer",
+          }}
+        >
+          Admin
         </button>
         <button
           onClick={() => {

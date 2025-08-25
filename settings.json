@@ -1,0 +1,13 @@
+{
+  "viewsEnabled": {
+    "dashboard": true,
+    "news": true,
+    "calendar": true
+  },
+  "dayHours": {
+    "start": 6,
+    "end": 21
+  },
+  "calendarDaysAhead": 6,
+  "rotateSeconds": 20
+}
