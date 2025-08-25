@@ -524,6 +524,23 @@ app.get("/api/presence/beacon", (req, res) => {
   res.json({ ok: true, name, ttlSec: PRESENCE_TTL_SEC, at: new Date().toISOString() });
 });
 
+// server.ts (above SPA fallback)
+const __dirname2 = path.dirname(fileURLToPath(import.meta.url));
+const OVERLAYS_FILE = process.env.OVERLAYS_FILE
+  ? path.resolve(process.cwd(), process.env.OVERLAYS_FILE)
+  : path.join(__dirname2, "overlays.json");
+
+app.get("/api/overlays", (_req, res) => {
+  try {
+    const raw = fs.existsSync(OVERLAYS_FILE) ? fs.readFileSync(OVERLAYS_FILE, "utf8") : '{"overlays":[]}';
+    const j = JSON.parse(raw);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ overlays: Array.isArray(j.overlays) ? j.overlays : [] });
+  } catch (e: any) {
+    res.status(500).json({ overlays: [], error: e?.message || "overlay parse error" });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Proxy listening on http://localhost:${PORT}`);
 });

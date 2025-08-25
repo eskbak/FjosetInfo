@@ -5,6 +5,7 @@ import NewsView from "./views/NewsView";
 import CalendarView from "./views/CalendarView";
 import type { Theme, Colors } from "./types";
 import ArrivalOverlay from "./components/ArrivalOverlay";
+import GlobalOverlays from "./components/GlobalOverlays";
 
 export default function App() {
   // --- Arrival overlay state ---
@@ -203,6 +204,9 @@ export default function App() {
   return (
     <div style={pageStyle}>
       <Header todayText={todayNo} />
+
+            {/* overlays visible across all views */}
+      <GlobalOverlays />
 
       {view === "dashboard" && (
         <DashboardView theme={theme} colors={COLORS} isDay={isDay} />

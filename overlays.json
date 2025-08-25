@@ -1,0 +1,64 @@
+{
+  "overlays": [
+    {
+      "id": "border-1",
+      "type": "GlowBorder",
+      "daily": {
+        "tz": "Europe/Oslo",
+        "timeStart": "08:00",
+        "timeEnd": "10:00"
+      },
+      "props": {
+        "thicknessPx": 30,
+        "radiusPx": 0,
+        "speedMs": 5000,
+        "opacity": 0.7,
+        "colors": ["#ff6b6b", "#ffd93d", "#4d96ff", "#b967ff"]
+      }
+    },
+    {
+      "id": "morning-float",
+      "label": "Morning floaters",
+      "type": "EmojiFloaters",
+      "daily": {
+        "tz": "Europe/Oslo",
+        "timeStart": "18:00",
+        "timeEnd": "20:08",
+        "dateFrom": "2025-08-21",
+        "dateTo": "2025-08-22"
+      },
+      "props": {
+        "emojis": ["☕", "✨", "🌤️"],
+        "count": 48,
+        "speedRangeS": [5, 20],
+        "sizeRangePx": [30, 40]
+      }
+    },
+    {
+      "id": "xmas-snow",
+      "label": "Snowfall Morning",
+      "type": "Snowfall",
+      "daily": {
+        "tz": "Europe/Oslo",
+        "timeStart": "07:00",
+        "timeEnd": "11:00",
+        "dateFrom": "2025-08-22",
+        "dateTo": "2025-08-24"
+      },
+      "zIndex": 2050,
+      "props": {
+        "count": 30,
+        "sizeRangePx": [6, 12],
+        "speedRangeS": [15, 30],
+        "swayRangePx": [30, 90],
+        "swaySpeedRangeS": [4, 8],
+        "twirl": true,
+        "twirlSpeedRangeS": [4, 10],
+        "opacity": 0.95,
+        "blurPx": 0,
+        "useEmoji": true,
+        "emoji": "🍺"
+      }
+    }
+  ]
+}
