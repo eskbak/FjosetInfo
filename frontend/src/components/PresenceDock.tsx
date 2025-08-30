@@ -1,3 +1,4 @@
+// components/PresenceDock.tsx
 import { useEffect, useMemo, useState } from "react";
 
 // --- IMPORT YOUR PNGs HERE ---
@@ -7,7 +8,6 @@ import eskilPng from "../assets/avatars/eskil.png?url";
 // import kristianPng from "../assets/avatars/kristian.png?url";
 // import niklasPng from "../assets/avatars/niklas.png?url";
 // import mariusPng from "../assets/avatars/marius.png?url";
-// Optional fallback silhouette
 import fallbackPng from "../assets/avatars/fallback.png?url";
 
 // Map KNOWN_DEVICES "name" -> image
@@ -21,9 +21,9 @@ const AVATARS: Record<string, string> = {
 };
 
 type Props = {
-  zIndex?: number;     // default 1800 (below ArrivalOverlay 9999, above views)
+  zIndex?: number;     // default 1800 (below ArrivalOverlay)
   gapPx?: number;      // default 12
-  minSizePx?: number;  // default 90
+  minSizePx?: number;  // default 150
   maxSizePx?: number;  // default 220
 };
 
@@ -46,7 +46,7 @@ export default function PresenceDock({
         const j = await r.json();
         if (!alive) return;
         const list = Array.isArray(j.present) ? (j.present as string[]) : [];
-        // Keep a stable, friendly order (your household order)
+        // Household order keeps positions stable
         const ORDER = ["Hallgrim", "Eskil", "Sindre", "Kristian", "Niklas", "Marius"];
         list.sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
         setPresent(list);
@@ -60,11 +60,11 @@ export default function PresenceDock({
     return () => { alive = false; clearInterval(id); };
   }, []);
 
-  // compute avatar size so n avatars use full width (with gap)
+  // compute avatar size so n avatars use (almost) full width
   const recomputeSize = () => {
     const n = Math.max(1, present.length);
-    const pad = 16; // left+right padding of the dock
-    const w = Math.max(360, window.innerWidth); // guard tiny widths
+    const pad = 0; // no rail padding anymore
+    const w = Math.max(360, window.innerWidth);
     const available = w - pad * 2 - gapPx * (n - 1);
     const s = Math.floor(available / n);
     setSize(Math.max(minSizePx, Math.min(maxSizePx, s)));
@@ -84,18 +84,8 @@ export default function PresenceDock({
     right: 0,
     bottom: 0,
     zIndex,
-    pointerEvents: "none", // overlay-only, not interactive
+    pointerEvents: "none", // not interactive
     display: present.length ? "block" : "none",
-  };
-
-  const railStyle: React.CSSProperties = {
-    width: "100vw",
-    padding: "0 16px",
-    boxSizing: "border-box",
-    // Subtle gradient so they feel like they’re “popping up”
-    background: "linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.15) 45%, rgba(0,0,0,0.35) 100%)",
-    // Give it a little top fade only when someone is present
-    backdropFilter: "blur(2px)",
   };
 
   const rowStyle: React.CSSProperties = {
@@ -103,24 +93,23 @@ export default function PresenceDock({
     justifyContent: "center",
     alignItems: "flex-end",
     gap: gapPx,
-    paddingBottom: 0,
-    paddingTop: 6,
-    minHeight: size + 6, // "sticks up" from the very bottom
+    padding: 0,
+    minHeight: size, // sticks up exactly by the image height
   };
 
-  const avatarStyle: React.CSSProperties = {
-    width: size,
-    objectFit: "contain" as const,
-    imageRendering: "auto" as const,
-    filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.35))",
-    transform: "translateY(6px)",  // sit slightly below baseline so they feel grounded
-    willChange: "transform, opacity",
-    animation: "dockPop 420ms cubic-bezier(.2,.8,.2,1)",
-    // rounded only if your PNGs aren’t already masked
-    borderRadius: 12,
-    pointerEvents: "none",
-    userSelect: "none" as const,
-  };
+const avatarStyle: React.CSSProperties = {
+  width: size,
+  height: "auto",
+  objectFit: "contain" as const,
+  imageRendering: "auto" as const,
+  transform: "translateY(2px)",
+  border: "none",
+  borderRadius: 0,
+  pointerEvents: "none",
+  userSelect: "none" as const,
+  filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.35))", // ← subtle soft shadow
+  willChange: "filter", // tiny hint; safe to remove if you want
+};
 
   const avatars = useMemo(
     () =>
@@ -133,28 +122,18 @@ export default function PresenceDock({
 
   return (
     <div style={containerStyle} aria-hidden>
-      <style>{`
-@keyframes dockPop {
-  0% { opacity: 0; transform: translateY(20px) scale(0.95) }
-  60% { opacity: 1; transform: translateY(2px) scale(1.04) }
-  100% { opacity: 1; transform: translateY(6px) scale(1) }
-}
-      `}</style>
-
-      <div style={railStyle}>
-        <div style={rowStyle}>
-          {avatars.map((a) => (
-            <img
-              key={a.name}
-              src={a.src}
-              alt={a.name}
-              title={a.name}
-              style={avatarStyle}
-              loading="eager"
-              decoding="async"
-            />
-          ))}
-        </div>
+      <div style={rowStyle}>
+        {avatars.map((a) => (
+          <img
+            key={a.name}
+            src={a.src}
+            alt={a.name}
+            title={a.name}
+            style={avatarStyle}
+            loading="eager"
+            decoding="async"
+          />
+        ))}
       </div>
     </div>
   );
