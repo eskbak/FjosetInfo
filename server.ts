@@ -41,15 +41,15 @@ type YRCompact = {
         instant?: {
           details?: {
             air_temperature?: number;
-            wind_speed?: number; // m/s
-            wind_speed_of_gust?: number; // m/s
-            wind_from_direction?: number; // degrees
+            wind_speed?: number;             // m/s
+            wind_speed_of_gust?: number;     // m/s
+            wind_from_direction?: number;    // degrees
           };
         };
         next_1_hours?: {
           summary?: { symbol_code?: string };
           details?: {
-            precipitation_amount?: number; // mm (single value)
+            precipitation_amount?: number;   // mm (single value)
           };
         };
       };
@@ -64,10 +64,11 @@ type GoogleEventItem = {
   description?: string;
   htmlLink?: string;
   start: { date?: string; dateTime?: string; timeZone?: string };
-  end: { date?: string; dateTime?: string; timeZone?: string };
+  end:   { date?: string; dateTime?: string; timeZone?: string };
 };
 
 type KnownDevice = { name: string; macs?: string[]; ips?: string[] };
+type NeighborRow = { ip: string; mac: string; state: string };
 
 // ---------------------------------------------------------------------------
 // Paths / constants
@@ -86,8 +87,21 @@ const NRK_RSS_URL = process.env.NRK_RSS_URL || "https://www.nrk.no/nyheter/siste
 
 const PRESENCE_MODE = process.env.PRESENCE_MODE || "auto"; // "arp" | "beacon" | "auto"
 const PRESENCE_TTL_SEC = Number(process.env.PRESENCE_TTL_SEC || 20); // beacon TTL (seconds)
-const BEACON_SECRET = process.env.PRESENCE_BEACON_SECRET || ""; // required for beacon writes
+const BEACON_SECRET = process.env.PRESENCE_BEACON_SECRET || "";      // required for beacon writes
 const PRESENCE_SCAN_INTERVAL_SEC = Number(process.env.PRESENCE_SCAN_INTERVAL_SEC || 10);
+
+// ARP presence: which neighbor states count as "alive"
+const ARP_ACTIVE_STATES = new Set(
+  (process.env.ARP_ACTIVE_STATES || "REACHABLE,DELAY,PROBE")
+    .split(",")
+    .map(s => s.trim().toUpperCase())
+    .filter(Boolean)
+);
+
+// ARP presence: how long after last "alive" sighting we keep someone present
+const ARP_PRESENT_TTL_SEC = Number(
+  process.env.ARP_PRESENT_TTL_SEC || Math.max(20, PRESENCE_SCAN_INTERVAL_SEC * 3)
+);
 
 const OVERLAYS_FILE = process.env.OVERLAYS_FILE
   ? path.resolve(process.cwd(), process.env.OVERLAYS_FILE)
@@ -122,6 +136,11 @@ function writeJsonAtomic(file: string, data: any) {
   const tmp = `${file}.tmp-${Date.now()}`;
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2), "utf8");
   fs.renameSync(tmp, file);
+}
+
+function clampInt(v: any, min: number, max: number, d: number) {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : d;
 }
 
 // Normalize MAC & devices from env
@@ -457,10 +476,7 @@ app.get("/api/calendar/upcoming", async (req: ExpressRequest, res: ExpressRespon
       defaultStart.getFullYear(),
       defaultStart.getMonth(),
       defaultStart.getDate() + 4,
-      23,
-      59,
-      59,
-      999
+      23, 59, 59, 999
     );
 
     const timeMin = (
@@ -499,24 +515,32 @@ app.get("/api/calendar/upcoming", async (req: ExpressRequest, res: ExpressRespon
 // Presence (ARP / Beacon)
 // ---------------------------------------------------------------------------
 
-// ARP reader (Linux /proc/net/arp, fallback to `arp -an`)
-function readArp(): Array<{ ip: string; mac: string }> {
+// Prefer iproute2 JSON with proper neighbor states. Fallback to /proc/net/arp.
+function readNeighbors(): NeighborRow[] {
   try {
-    const txt = fs.readFileSync("/proc/net/arp", "utf8");
-    const lines = txt.trim().split("\n").slice(1);
-    const rows = lines
-      .map((l) => l.trim().split(/\s+/))
-      .map(([ip, _hwtype, _flags, mac]) => ({ ip, mac: (mac || "").toLowerCase() }))
-      .filter((r) => r.mac && r.mac !== "00:00:00:00:00:00");
-    return rows;
+    const out = execSync("ip -j neigh", { timeout: 1500 }).toString();
+    const arr = JSON.parse(out) as Array<any>;
+    return arr
+      .map(e => ({
+        ip: String(e.dst || ""),
+        mac: String(e.lladdr || "").toLowerCase(),
+        state: String(e.state || "").toUpperCase(),
+      }))
+      .filter(n => n.ip && n.mac && n.mac !== "00:00:00:00:00:00");
   } catch {
+    // Fallback: /proc/net/arp (no state → approximate)
     try {
-      const out = execSync("arp -an", { timeout: 1500 }).toString();
-      const rows = [...out.matchAll(/\(([^)]+)\)\s+at\s+([0-9a-f:]+)/gi)].map((m) => ({
-        ip: m[1],
-        mac: m[2].toLowerCase(),
-      }));
-      return rows;
+      const txt = fs.readFileSync("/proc/net/arp", "utf8");
+      const lines = txt.trim().split("\n").slice(1);
+      return lines
+        .map(l => l.trim().split(/\s+/))
+        .map(([ip, _hwtype, flags, mac]) => ({
+          ip,
+          mac: (mac || "").toLowerCase(),
+          // crude guess: flag 0x2 indicates complete; treat as STALE so it won't keep presence alive by itself
+          state: Number(flags) === 0x2 ? "STALE" : "INCOMPLETE",
+        }))
+        .filter(n => n.mac && n.mac !== "00:00:00:00:00:00");
     } catch {
       return [];
     }
@@ -532,44 +556,50 @@ function warmArpKnownIps() {
   for (const d of KNOWN_DEVICES) for (const ip of d.ips || []) pingOnce(ip);
 }
 
-let lastArpRows: Array<{ ip: string; mac: string }> = [];
+let lastNeighbors: NeighborRow[] = [];
+const lastArpAliveAt = new Map<string, number>(); // name -> last time seen in an "active" neighbor state
+const lastSeen = new Map<string, number>();       // beacon name -> last ping time
 
-function scanArp() {
-  try {
-    warmArpKnownIps();
-  } catch {}
-  // small delay lets kernel learn neighbors before we read table
+function scanNeighbors() {
+  try { warmArpKnownIps(); } catch {}
   setTimeout(() => {
-    lastArpRows = readArp();
-  }, 700);
+    const now = Date.now();
+    lastNeighbors = readNeighbors();
+
+    // Update "alive" timestamps for names matched this scan, but only if neighbor state is active
+    for (const dev of KNOWN_DEVICES) {
+      const match = lastNeighbors.find(n =>
+        (dev.macs || []).some(m => n.mac === m.toLowerCase()) ||
+        (dev.ips || []).some(ip => n.ip === ip)
+      );
+      if (match && ARP_ACTIVE_STATES.has(match.state)) {
+        lastArpAliveAt.set(dev.name, now);
+      }
+    }
+  }, 500); // small delay so nudge pings can populate neighbor cache
 }
 
 // initial + interval
-scanArp();
-setInterval(scanArp, PRESENCE_SCAN_INTERVAL_SEC * 1000);
-
-// Beacon cache
-const lastSeen = new Map<string, number>();
+scanNeighbors();
+setInterval(scanNeighbors, PRESENCE_SCAN_INTERVAL_SEC * 1000);
 
 function computePresence() {
   const now = Date.now();
   const seenVia: Record<string, "arp" | "beacon"> = {};
   const present = new Set<string>();
 
+  // ARP presence with TTL on last alive sighting
   if (PRESENCE_MODE === "arp" || PRESENCE_MODE === "auto") {
-    const arp = lastArpRows;
-    const arpMacs = new Set(arp.map((r) => r.mac)); // lower-case with colons
-    const arpIps = new Set(arp.map((r) => r.ip));
-    for (const d of KNOWN_DEVICES) {
-      const macHit = (d.macs || []).some((m) => arpMacs.has(normMac(m)));
-      const ipHit = (d.ips || []).some((ip) => arpIps.has(ip));
-      if (macHit || ipHit) {
-        present.add(d.name);
-        seenVia[d.name] = "arp";
+    for (const dev of KNOWN_DEVICES) {
+      const ts = lastArpAliveAt.get(dev.name) || 0;
+      if (now - ts <= ARP_PRESENT_TTL_SEC * 1000) {
+        present.add(dev.name);
+        seenVia[dev.name] = "arp";
       }
     }
   }
 
+  // Beacon presence (time-based)
   if (PRESENCE_MODE === "beacon" || PRESENCE_MODE === "auto") {
     for (const [name, ts] of lastSeen) {
       if (now - ts <= PRESENCE_TTL_SEC * 1000) {
@@ -605,12 +635,18 @@ app.get("/api/presence/beacon", (req, res) => {
   res.json({ ok: true, name, ttlSec: PRESENCE_TTL_SEC, at: new Date().toISOString() });
 });
 
-// Debug
+// Presence debug (richer)
 app.get("/api/presence/debug", (_req, res) => {
+  const now = Date.now();
   res.json({
     mode: PRESENCE_MODE,
+    arpPresentTtlSec: ARP_PRESENT_TTL_SEC,
+    activeStates: [...ARP_ACTIVE_STATES],
     knownDevices: KNOWN_DEVICES,
-    arpSample: lastArpRows.slice(0, 100),
+    neighbors: lastNeighbors, // ip, mac, state
+    lastAlive: [...lastArpAliveAt.entries()].map(([name, ts]) => ({
+      name, lastAliveIso: new Date(ts).toISOString(), ageSec: Math.round((now - ts) / 1000),
+    })),
     now: new Date().toISOString(),
   });
 });
@@ -665,10 +701,10 @@ app.put("/api/settings", (req, res) => {
       },
       dayHours: {
         start: clampInt(body?.dayHours?.start, 0, 23, DEFAULT_SETTINGS.dayHours.start),
-        end: clampInt(body?.dayHours?.end, 1, 24, DEFAULT_SETTINGS.dayHours.end),
+        end:   clampInt(body?.dayHours?.end,   1, 24, DEFAULT_SETTINGS.dayHours.end),
       },
       calendarDaysAhead: clampInt(body.calendarDaysAhead, 0, 14, DEFAULT_SETTINGS.calendarDaysAhead),
-      rotateSeconds: clampInt(body.rotateSeconds, 5, 600, DEFAULT_SETTINGS.rotateSeconds),
+      rotateSeconds:     clampInt(body.rotateSeconds,     5, 600, DEFAULT_SETTINGS.rotateSeconds),
     };
     writeJsonAtomic(SETTINGS_FILE, next);
     res.json({ ok: true, settings: next });
@@ -676,11 +712,6 @@ app.put("/api/settings", (req, res) => {
     res.status(400).json({ ok: false, error: e?.message || "Invalid settings" });
   }
 });
-
-function clampInt(v: any, min: number, max: number, d: number) {
-  const n = Math.round(Number(v));
-  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : d;
-}
 
 // ---------------------------------------------------------------------------
 // OAuth helper (mint a refresh_token once)
