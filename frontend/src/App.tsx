@@ -6,6 +6,7 @@ import CalendarView from "./views/CalendarView";
 import AdminView from "./views/AdminView";
 import GlobalOverlays from "./components/GlobalOverlays";
 import ArrivalOverlay from "./components/ArrivalOverlay";
+import PresenceDock from "./components/PresenceDock";
 import type { Theme, Colors } from "./types";
 import { useSettings } from "./state/SettingsContext";
 
@@ -221,6 +222,8 @@ const tick = async () => {
 
       {/* overlays visible across all views */}
       <GlobalOverlays />
+
+      <PresenceDock />
 
       {/* Rotating views */}
       {view === "dashboard" && <DashboardView theme={theme} colors={COLORS} isDay={isDay} />}
