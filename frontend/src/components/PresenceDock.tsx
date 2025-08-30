@@ -30,7 +30,7 @@ type Props = {
 export default function PresenceDock({
   zIndex = 1800,
   gapPx = 12,
-  minSizePx = 90,
+  minSizePx = 150,
   maxSizePx = 220,
 }: Props) {
   const [present, setPresent] = useState<string[]>([]);
@@ -110,7 +110,6 @@ export default function PresenceDock({
 
   const avatarStyle: React.CSSProperties = {
     width: size,
-    height: size,                  // if your PNGs are square heads; if full-body, remove height
     objectFit: "contain" as const,
     imageRendering: "auto" as const,
     filter: "drop-shadow(0 6px 10px rgba(0,0,0,0.35))",

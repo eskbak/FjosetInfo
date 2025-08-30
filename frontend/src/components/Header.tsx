@@ -2,37 +2,6 @@ import { useEffect, useState } from "react";
 import Clock from "./Clock";
 import kua from "../assets/kua.png"; // adjust path if your file lives elsewhere
 
-function PresenceLine() {
-  const [present, setPresent] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  async function load() {
-    try {
-      const r = await fetch("/api/presence", { cache: "no-store" }); // ← avoid any caching
-      const j = await r.json();
-      setPresent(Array.isArray(j.present) ? j.present : []);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();                                     // initial
-    const POLL_MS = 10_000;                     // match server scan / overlay poll
-    const id = setInterval(load, POLL_MS);      // was 20_000
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <div style={{ fontSize: "1.25em", marginTop: 6, opacity: 0.9 }}>
-      <strong>Hjemme:&nbsp;</strong>
-      {loading ? "…" : present.length ? present.join(", ") : "Ingen"}
-    </div>
-  );
-}
-
 export default function Header({ todayText }: { todayText: string }) {
   return (
     <header
@@ -47,7 +16,6 @@ export default function Header({ todayText }: { todayText: string }) {
     >
       <div style={{ justifySelf: "start" }}>
         <Clock />
-        <PresenceLine />
       </div>
 
       <div style={{ justifySelf: "center", lineHeight: 0 }}>
