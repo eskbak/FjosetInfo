@@ -143,43 +143,51 @@ export default function App() {
 
   // presence polling -> queue new arrivals
   useEffect(() => {
-    const tick = async () => {
-      try {
-        const r = await fetch("/api/presence", { cache: "no-store" });
-        const j = await r.json();
-        const present: string[] = Array.isArray(j.present) ? j.present : [];
-        const cur = new Set(present);
+const tick = async () => {
+  try {
+    const r = await fetch("/api/presence", { cache: "no-store" });
+    const j = await r.json();
+    const present: string[] = Array.isArray(j.present) ? j.present : [];
+    const cur = new Set(present);
 
-        if (!baselineDoneRef.current) {
-          lastPresentRef.current = cur;      // don't alert for those already home
-          baselineDoneRef.current = true;
-          return;
-        }
+    if (!baselineDoneRef.current) {
+      // first fetch: set baseline, don't alert existing people
+      lastPresentRef.current = cur;
+      baselineDoneRef.current = true;
+      return;
+    }
 
-        // find newly present vs previous poll
-        const prev = lastPresentRef.current;
-        const added = present.filter((p) => !prev.has(p));
+    // --- NEW: clear cooldown for anyone who left since last poll ---
+    const prev = lastPresentRef.current;
+    const removed = [...prev].filter((p) => !cur.has(p));
+    for (const name of removed) {
+      lastAnnouncedAtRef.current.delete(name);
+    }
 
-        // enqueue with cooldown
-        const now = Date.now();
-        for (const name of added) {
-          const lastAt = lastAnnouncedAtRef.current.get(name) || 0;
-          if (now - lastAt >= ANNOUNCE_COOLDOWN_MS) {
-            queueRef.current.push(name);
-            lastAnnouncedAtRef.current.set(name, now);
-          }
-        }
+    // find newly present vs the previous poll
+    const added = present.filter((p) => !prev.has(p));
 
-        lastPresentRef.current = cur;
-
-        // if nothing showing, pop next
-        if (!arrivalName && queueRef.current.length > 0) {
-          setArrivalName(queueRef.current.shift() || null);
-        }
-      } catch {
-        // ignore; try again on next poll
+    // enqueue with cooldown
+    const now = Date.now();
+    for (const name of added) {
+      const lastAt = lastAnnouncedAtRef.current.get(name) || 0;
+      if (now - lastAt >= ANNOUNCE_COOLDOWN_MS) {
+        queueRef.current.push(name);
+        lastAnnouncedAtRef.current.set(name, now);
       }
-    };
+    }
+
+    lastPresentRef.current = cur;
+
+    // if nothing showing, pop next
+    if (!arrivalName && queueRef.current.length > 0) {
+      setArrivalName(queueRef.current.shift() || null);
+    }
+  } catch {
+    // ignore; try again on next poll
+  }
+};
+
 
     // initial + interval
     tick();

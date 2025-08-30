@@ -8,7 +8,7 @@ function PresenceLine() {
 
   async function load() {
     try {
-      const r = await fetch("/api/presence");
+      const r = await fetch("/api/presence", { cache: "no-store" }); // ← avoid any caching
       const j = await r.json();
       setPresent(Array.isArray(j.present) ? j.present : []);
     } catch {
@@ -19,8 +19,9 @@ function PresenceLine() {
   }
 
   useEffect(() => {
-    load();
-    const id = setInterval(load, 20000); // 20s
+    load();                                     // initial
+    const POLL_MS = 10_000;                     // match server scan / overlay poll
+    const id = setInterval(load, POLL_MS);      // was 20_000
     return () => clearInterval(id);
   }, []);
 
