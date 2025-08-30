@@ -2,22 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 
 // --- IMPORT YOUR PNGs HERE ---
 import eskilPng from "../assets/avatars/eskil.png?url";
-import sindrePng from "../assets/avatars/sindre.png?url";
-import hallgrimPng from "../assets/avatars/hallgrim.png?url";
-import kristianPng from "../assets/avatars/kristian.png?url";
-import niklasPng from "../assets/avatars/niklas.png?url";
-import mariusPng from "../assets/avatars/marius.png?url";
+// import sindrePng from "../assets/avatars/sindre.png?url";
+// import hallgrimPng from "../assets/avatars/hallgrim.png?url";
+// import kristianPng from "../assets/avatars/kristian.png?url";
+// import niklasPng from "../assets/avatars/niklas.png?url";
+// import mariusPng from "../assets/avatars/marius.png?url";
 // Optional fallback silhouette
 import fallbackPng from "../assets/avatars/fallback.png?url";
 
 // Map KNOWN_DEVICES "name" -> image
 const AVATARS: Record<string, string> = {
   Eskil: eskilPng,
-  Sindre: sindrePng,
-  Hallgrim: hallgrimPng,
-  Kristian: kristianPng,
-  Niklas: niklasPng,
-  Marius: mariusPng,
+  Sindre: eskilPng,
+  Hallgrim: eskilPng,
+  Kristian: eskilPng,
+  Niklas: eskilPng,
+  Marius: eskilPng,
 };
 
 type Props = {
