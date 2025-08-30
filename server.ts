@@ -100,7 +100,7 @@ const ARP_ACTIVE_STATES = new Set(
 
 // ARP presence: how long after last "alive" sighting we keep someone present
 const ARP_PRESENT_TTL_SEC = Number(
-  process.env.ARP_PRESENT_TTL_SEC || Math.max(20, PRESENCE_SCAN_INTERVAL_SEC * 3)
+  process.env.ARP_PRESENT_TTL_SEC || Math.max(20, PRESENCE_SCAN_INTERVAL_SEC * 2)
 );
 
 const OVERLAYS_FILE = process.env.OVERLAYS_FILE
