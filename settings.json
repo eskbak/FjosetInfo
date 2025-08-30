@@ -6,8 +6,8 @@
   },
   "dayHours": {
     "start": 6,
-    "end": 17
+    "end": 18
   },
-  "calendarDaysAhead": 4,
-  "rotateSeconds": 5
+  "calendarDaysAhead": 5,
+  "rotateSeconds": 15
 }

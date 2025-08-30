@@ -1,5 +1,5 @@
 // components/ArrivalOverlay.tsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Props = {
   name: string;
@@ -16,22 +16,6 @@ export default function ArrivalOverlay({
   const closedRef = useRef(false);
   const mainTimerRef = useRef<number | null>(null);
   const watchdogRef = useRef<number | null>(null);
-
-  // Confetti payload (lightweight)
-  const confetti = useMemo(() => {
-    const EMOJI = ["🎉", "✨", "🎊", "⭐", "🏠", "🎈", "🍺", "🥳"];
-    const N = 70; // keep it moderate for Pi
-    return new Array(N).fill(0).map((_, i) => ({
-      id: i,
-      left: Math.random() * 100,
-      size: 18 + Math.random() * 22,
-      rot: Math.random() * 360,
-      delay: Math.random() * 0.8,
-      duration: 3.2 + Math.random() * 2.2,
-      emoji: EMOJI[Math.floor(Math.random() * EMOJI.length)],
-      drift: (Math.random() - 0.5) * 40,
-    }));
-  }, []);
 
   const close = () => {
     if (closedRef.current) return;
@@ -89,44 +73,7 @@ export default function ArrivalOverlay({
   45% { transform: translateY(0) scale(1.04); opacity: 1 }
   100% { transform: translateY(0) scale(1) }
 }
-@keyframes confettiFall {
-  0%   { transform: translate3d(var(--drift,0px), -110vh, 0) rotate(0deg) }
-  100% { transform: translate3d(var(--drift,0px),  110vh, 0) rotate(720deg) }
-}
       `}</style>
-
-      {/* Confetti layer */}
-      <div
-        aria-hidden
-        style={{
-          position: "absolute",
-          inset: 0,
-          overflow: "hidden",
-          pointerEvents: "none",
-          opacity: closing ? 0.0 : 1,
-          transition: "opacity 280ms ease",
-        }}
-      >
-        {confetti.map((c) => (
-          <div
-            key={c.id}
-            style={{
-              position: "absolute",
-              left: `${c.left}%`,
-              top: "-10vh",
-              fontSize: `${c.size}px`,
-              transform: `rotate(${c.rot}deg)`,
-              animation: `confettiFall ${c.duration}s linear ${c.delay}s forwards`,
-              // @ts-ignore CSS var is fine
-              "--drift": `${c.drift}px`,
-              filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.25))",
-              willChange: "transform",
-            } as React.CSSProperties}
-          >
-            {c.emoji}
-          </div>
-        ))}
-      </div>
 
       {/* Center card */}
       <div
@@ -139,7 +86,7 @@ export default function ArrivalOverlay({
           textAlign: "center",
           color: "white",
           maxWidth: 980,
-          width: "min(92vw, 980px)",
+          width: "min(70vw, 980px)",
           animation: closing ? undefined : "popIn 650ms cubic-bezier(.2,.8,.2,1)",
           boxShadow: "0 30px 90px rgba(0,0,0,0.45)",
           transition: "transform 220ms ease, opacity 220ms ease",
@@ -149,7 +96,7 @@ export default function ArrivalOverlay({
       >
         <div
           style={{
-            fontSize: "clamp(20px, 4.5vw, 40px)",
+            fontSize: "clamp(31px, 6vw, 64px)",
             letterSpacing: 1,
             opacity: 0.9,
             marginBottom: 6,
@@ -166,9 +113,6 @@ export default function ArrivalOverlay({
           }}
         >
           {name} er hjemme
-        </div>
-        <div style={{ marginTop: 10, opacity: 0.8, fontSize: "clamp(14px, 2.4vw, 18px)" }}>
-          (Klikk eller trykk Esc for å lukke)
         </div>
       </div>
     </div>
