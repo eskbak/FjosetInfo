@@ -1,13 +1,16 @@
-import 'dotenv/config';
-import express, { Request, Response } from 'express';
-import cors from 'cors';
+// server.ts
+import "dotenv/config";
+import express, { Request, Response } from "express";
+import cors from "cors";
 import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
 import fs from "fs";
-import { execSync } from "child_process";
+import { exec, execSync } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// ---------------- Types ----------------
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 type EnturDeparture = {
   expectedDepartureTime?: string;
   aimedDepartureTime?: string;
@@ -38,15 +41,15 @@ type YRCompact = {
         instant?: {
           details?: {
             air_temperature?: number;
-            wind_speed?: number;             // m/s
-            wind_speed_of_gust?: number;     // m/s
-            wind_from_direction?: number;    // degrees
+            wind_speed?: number; // m/s
+            wind_speed_of_gust?: number; // m/s
+            wind_from_direction?: number; // degrees
           };
         };
         next_1_hours?: {
           summary?: { symbol_code?: string };
           details?: {
-            precipitation_amount?: number;        // mm (single value)
+            precipitation_amount?: number; // mm (single value)
           };
         };
       };
@@ -54,67 +57,105 @@ type YRCompact = {
   };
 };
 
+type GoogleEventItem = {
+  id: string;
+  summary?: string;
+  location?: string;
+  description?: string;
+  htmlLink?: string;
+  start: { date?: string; dateTime?: string; timeZone?: string };
+  end: { date?: string; dateTime?: string; timeZone?: string };
+};
+
+type KnownDevice = { name: string; macs?: string[]; ips?: string[] };
+
+// ---------------------------------------------------------------------------
+// Paths / constants
+// ---------------------------------------------------------------------------
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
 
 const PORT = Number(process.env.PORT || 8787);
-const ET_CLIENT_NAME = process.env.ET_CLIENT_NAME || 'pi-infoscreen/0.1 (example@example.com)';
-const MET_USER_AGENT = process.env.MET_USER_AGENT || 'pi-infoscreen/0.1 (example@example.com)';
-const NRK_RSS_URL = process.env.NRK_RSS_URL || 'https://www.nrk.no/nyheter/siste.rss';
+const ET_CLIENT_NAME = process.env.ET_CLIENT_NAME || "pi-infoscreen/0.1 (example@example.com)";
+const MET_USER_AGENT = process.env.MET_USER_AGENT || "pi-infoscreen/0.1 (example@example.com)";
+const NRK_RSS_URL = process.env.NRK_RSS_URL || "https://www.nrk.no/nyheter/siste.rss";
+
 const PRESENCE_MODE = process.env.PRESENCE_MODE || "auto"; // "arp" | "beacon" | "auto"
-const PRESENCE_TTL_SEC = Number(process.env.PRESENCE_TTL_SEC || 600); // 10 minutes
+const PRESENCE_TTL_SEC = Number(process.env.PRESENCE_TTL_SEC || 20); // beacon TTL (seconds)
 const BEACON_SECRET = process.env.PRESENCE_BEACON_SECRET || ""; // required for beacon writes
 const PRESENCE_SCAN_INTERVAL_SEC = Number(process.env.PRESENCE_SCAN_INTERVAL_SEC || 10);
-type KnownDevice = { name: string; macs?: string[]; ips?: string[] };
+
+const OVERLAYS_FILE = process.env.OVERLAYS_FILE
+  ? path.resolve(process.cwd(), process.env.OVERLAYS_FILE)
+  : path.join(__dirname, "overlays.json");
+
+const SETTINGS_FILE = process.env.SETTINGS_FILE
+  ? path.resolve(process.cwd(), process.env.SETTINGS_FILE)
+  : path.join(__dirname, "settings.json");
+
+const DEFAULT_SETTINGS = {
+  viewsEnabled: { dashboard: true, news: true, calendar: true },
+  dayHours: { start: 6, end: 18 }, // local hours where UI is considered "day"
+  calendarDaysAhead: 4,
+  rotateSeconds: 45,
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function readJsonSafe<T>(file: string, fallback: T): T {
+  try {
+    if (!fs.existsSync(file)) return fallback;
+    const raw = fs.readFileSync(file, "utf8");
+    const j = JSON.parse(raw);
+    return (j as T) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJsonAtomic(file: string, data: any) {
+  const tmp = `${file}.tmp-${Date.now()}`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), "utf8");
+  fs.renameSync(tmp, file);
+}
+
+// Normalize MAC & devices from env
+function normMac(s?: string) {
+  return (s || "").trim().toLowerCase().replace(/-/g, ":");
+}
+function normDevice(d: { name: string; macs?: string[]; ips?: string[] }): KnownDevice {
+  return {
+    name: String(d.name || "").trim(),
+    macs: Array.isArray(d.macs) ? d.macs.map(normMac).filter(Boolean) : [],
+    ips: Array.isArray(d.ips) ? d.ips.map((ip) => String(ip || "").trim()).filter(Boolean) : [],
+  };
+}
+
+// Parse KNOWN_DEVICES from .env as proper JSON
 const KNOWN_DEVICES: KnownDevice[] = (() => {
   try {
     const raw = process.env.KNOWN_DEVICES || "[]";
     const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr : [];
+    return Array.isArray(arr) ? arr.map(normDevice) : [];
   } catch {
     return [];
   }
 })();
 
-let lastArpRows: Array<{ ip: string; mac: string }> = [];
-function scanArp() { lastArpRows = readArp(); }
-scanArp();
-setInterval(scanArp, PRESENCE_SCAN_INTERVAL_SEC * 1000);
-
-function readArp(): Array<{ ip: string; mac: string }> {
-  // Linux: /proc/net/arp
+// ---------------------------------------------------------------------------
+// Entur departures (no line filter)
+// ---------------------------------------------------------------------------
+app.get("/api/entur/departures", async (req: Request, res: Response) => {
   try {
-    const txt = fs.readFileSync("/proc/net/arp", "utf8");
-    const lines = txt.trim().split("\n").slice(1);
-    const rows = lines
-      .map((l) => l.trim().split(/\s+/))
-      .map(([ip, _hwtype, _flags, mac]) => ({ ip, mac: (mac || "").toLowerCase() }))
-      .filter((r) => r.mac && r.mac !== "00:00:00:00:00:00");
-    return rows;
-  } catch {
-    // Fallback: `arp -an`
-    try {
-      const out = execSync("arp -an", { timeout: 1500 }).toString();
-      const rows = [...out.matchAll(/\(([^)]+)\)\s+at\s+([0-9a-f:]+)/gi)].map((m) => ({
-        ip: m[1],
-        mac: m[2].toLowerCase(),
-      }));
-      return rows;
-    } catch {
-      return [];
-    }
-  }
-}
-
-// --- Entur / AtB departures (filtered to publicCode=25)
-app.get('/api/entur/departures', async (req: Request, res: Response) => {
-  try {
-    const stopPlaceId = String(req.query.stopPlaceId || '');
+    const stopPlaceId = String(req.query.stopPlaceId || "");
     const max = Number(req.query.max || 12);
-
     if (!stopPlaceId) {
-      return res.status(400).json({ error: 'Missing stopPlaceId' });
+      return res.status(400).json({ error: "Missing stopPlaceId" });
     }
 
     const query = `
@@ -135,11 +176,11 @@ app.get('/api/entur/departures', async (req: Request, res: Response) => {
       }
     `;
 
-    const r = await fetch('https://api.entur.io/journey-planner/v3/graphql', {
-      method: 'POST',
+    const r = await fetch("https://api.entur.io/journey-planner/v3/graphql", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'ET-Client-Name': ET_CLIENT_NAME,
+        "Content-Type": "application/json",
+        "ET-Client-Name": ET_CLIENT_NAME,
       },
       body: JSON.stringify({ query, variables: { id: stopPlaceId, max } }),
     });
@@ -150,14 +191,11 @@ app.get('/api/entur/departures', async (req: Request, res: Response) => {
     }
 
     const data = (await r.json()) as EnturGraphQL;
-
-    // No filtering by line publicCode — include all lines
     const calls = (data.data?.stopPlace?.estimatedCalls ?? [])
-      // sort by expected time (fallback to aimed)
       .slice()
       .sort((a, b) => {
-        const ta = Date.parse(a.expectedDepartureTime ?? a.aimedDepartureTime ?? '');
-        const tb = Date.parse(b.expectedDepartureTime ?? b.aimedDepartureTime ?? '');
+        const ta = Date.parse(a.expectedDepartureTime ?? a.aimedDepartureTime ?? "");
+        const tb = Date.parse(b.expectedDepartureTime ?? b.aimedDepartureTime ?? "");
         return ta - tb;
       });
 
@@ -176,22 +214,21 @@ app.get('/api/entur/departures', async (req: Request, res: Response) => {
       })),
     });
   } catch (e: any) {
-    return res.status(500).json({ error: e?.message || 'Entur error' });
+    return res.status(500).json({ error: e?.message || "Entur error" });
   }
 });
 
-
-// --- YR / MET Norway: today forecast (compact)
-// --- YR / MET Norway: today + next hours (compact)
-app.get('/api/yr/today', async (req: Request, res: Response) => {
+// ---------------------------------------------------------------------------
+// YR / MET Norway today + hours (compact)
+// ---------------------------------------------------------------------------
+app.get("/api/yr/today", async (req: Request, res: Response) => {
   try {
     const lat = Number(req.query.lat || process.env.DEFAULT_LAT || 63.4305);
     const lon = Number(req.query.lon || process.env.DEFAULT_LON || 10.3951);
     const hoursWanted = Math.min(Math.max(Number(req.query.hours || 5), 1), 12); // 1..12
 
     const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`;
-    const r = await fetch(url, { headers: { 'User-Agent': MET_USER_AGENT } });
-
+    const r = await fetch(url, { headers: { "User-Agent": MET_USER_AGENT } });
     if (!r.ok) {
       const text = await r.text();
       return res.status(r.status).send(text);
@@ -201,17 +238,16 @@ app.get('/api/yr/today', async (req: Request, res: Response) => {
     const timeseries = payload.properties?.timeseries ?? [];
     const now = new Date();
 
-    // ---- "Today" summary (min/max temp and last symbol seen today)
     const todayISO = now.toISOString().slice(0, 10);
-    const todayPoints = timeseries.filter((t) => (t.time ?? '').slice(0, 10) === todayISO);
+    const todayPoints = timeseries.filter((t) => (t.time ?? "").slice(0, 10) === todayISO);
 
     let minT = Infinity;
     let maxT = -Infinity;
-    let symbol = '';
+    let symbol = "";
 
     for (const tp of todayPoints) {
       const temp = tp.data?.instant?.details?.air_temperature;
-      if (typeof temp === 'number') {
+      if (typeof temp === "number") {
         minT = Math.min(minT, temp);
         maxT = Math.max(maxT, temp);
       }
@@ -219,44 +255,38 @@ app.get('/api/yr/today', async (req: Request, res: Response) => {
       if (s) symbol = s;
     }
 
-    // ---- Next N hours (>= now). Prefer rows that have next_1_hours present.
     const nextHours: Array<{
-      time: string;              // "HH"
+      time: string;
       symbol: string | null;
-      temp: number | null;       // °C
-      precipMm: number | null;   // single value (avg if only range present)
-      wind: number | null;       // m/s
-      dir: number | null;        // degrees
-      iso: string;               // full ISO time
+      temp: number | null;
+      precipMm: number | null;
+      wind: number | null;
+      dir: number | null;
+      iso: string;
     }> = [];
 
     for (const tp of timeseries) {
       const t = new Date(tp.time ?? 0);
       if (isNaN(t.getTime()) || t < now) continue;
-
       const inst = tp.data?.instant?.details;
       const next = tp.data?.next_1_hours;
+      if (!inst || !next) continue;
 
-      if (!inst || !next) continue; // need both for hourly row
+      const amt =
+        typeof next.details?.precipitation_amount === "number"
+          ? Number(next.details.precipitation_amount.toFixed(1))
+          : null;
 
-      // Precipitation: always forward min/max if present, and the single value if present
-      const amt  = typeof next.details?.precipitation_amount === 'number'
-        ? Number(next.details.precipitation_amount.toFixed(1))
-        : null;
-
-      // precipMm: prefer the single value, else average of min/max if both present, else null
       let precipMm: number | null = null;
-      if (amt !== null) {
-        precipMm = amt;
-      }
+      if (amt !== null) precipMm = amt;
 
       nextHours.push({
-        time: String(t.getHours()).padStart(2, '0'),
+        time: String(t.getHours()).padStart(2, "0"),
         symbol: next.summary?.symbol_code ?? null,
-        temp: typeof inst.air_temperature === 'number' ? Math.round(inst.air_temperature) : null,
+        temp: typeof inst.air_temperature === "number" ? Math.round(inst.air_temperature) : null,
         precipMm,
-        wind: typeof inst.wind_speed === 'number' ? Math.round(inst.wind_speed) : null,
-        dir:  typeof inst.wind_from_direction === 'number' ? Math.round(inst.wind_from_direction) : null,
+        wind: typeof inst.wind_speed === "number" ? Math.round(inst.wind_speed) : null,
+        dir: typeof inst.wind_from_direction === "number" ? Math.round(inst.wind_from_direction) : null,
         iso: tp.time as string,
       });
 
@@ -273,18 +303,18 @@ app.get('/api/yr/today', async (req: Request, res: Response) => {
       hours: nextHours,
     });
   } catch (e: any) {
-    return res.status(500).json({ error: e?.message || 'YR error' });
+    return res.status(500).json({ error: e?.message || "YR error" });
   }
 });
 
-
-
-// --- NRK RSS proxied to JSON (title/link/pubDate/description/image)
-app.get('/api/nrk/latest', async (req: Request, res: Response) => {
+// ---------------------------------------------------------------------------
+// NRK RSS → JSON
+// ---------------------------------------------------------------------------
+app.get("/api/nrk/latest", async (req: Request, res: Response) => {
   try {
     const feedUrl = String(req.query.url || NRK_RSS_URL);
     const r = await fetch(feedUrl, {
-      headers: { 'Accept': 'application/rss+xml, application/xml;q=0.9, */*;q=0.8' },
+      headers: { Accept: "application/rss+xml, application/xml;q=0.9, */*;q=0.8" },
     });
     if (!r.ok) {
       const text = await r.text();
@@ -303,35 +333,29 @@ app.get('/api/nrk/latest', async (req: Request, res: Response) => {
     const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
     let m: RegExpExecArray | null;
 
-    const stripCdata = (s: string) => s.replace(/<!\[CDATA\[|\]\]>/g, '').trim();
+    const stripCdata = (s: string) => s.replace(/<!\[CDATA\[|\]\]>/g, "").trim();
     const getTag = (block: string, tag: string) => {
-      const mm = block.match(new RegExp(`<${tag}(?:[^>]*)>([\\s\\S]*?)<\\/${tag}>`, 'i'));
-      return stripCdata(mm?.[1] ?? '');
+      const mm = block.match(new RegExp(`<${tag}(?:[^>]*)>([\\s\\S]*?)<\\/${tag}>`, "i"));
+      return stripCdata(mm?.[1] ?? "");
     };
-
     const getAttr = (block: string, tag: string, attr: string) => {
-      const mm = block.match(new RegExp(`<${tag}[^>]*\\b${attr}="([^"]+)"[^>]*>`, 'i'));
-      return mm?.[1] ?? '';
+      const mm = block.match(new RegExp(`<${tag}[^>]*\\b${attr}="([^"]+)"[^>]*>`, "i"));
+      return mm?.[1] ?? "";
     };
-
     const firstImgInHtml = (html: string) => {
       const mm = html.match(/<img[^>]*src="([^"]+)"/i);
-      return mm?.[1] ?? '';
+      return mm?.[1] ?? "";
     };
 
     while ((m = itemRegex.exec(xml))) {
       const block = m[1];
-
-      const title = getTag(block, 'title');
-      const link = getTag(block, 'link');
-      const pubDate = getTag(block, 'pubDate');
-      const description = getTag(block, 'description');
-
-      // Try a few common places NRK puts images:
-      // 1) <media:content url="...">, 2) <enclosure url="...">, 3) first <img src> in description
+      const title = getTag(block, "title");
+      const link = getTag(block, "link");
+      const pubDate = getTag(block, "pubDate");
+      const description = getTag(block, "description");
       const mediaUrl =
-        getAttr(block, 'media:content', 'url') ||
-        getAttr(block, 'enclosure', 'url') ||
+        getAttr(block, "media:content", "url") ||
+        getAttr(block, "enclosure", "url") ||
         firstImgInHtml(description);
 
       items.push({
@@ -345,10 +369,13 @@ app.get('/api/nrk/latest', async (req: Request, res: Response) => {
 
     return res.json({ source: feedUrl, items });
   } catch (e: any) {
-    return res.status(500).json({ error: e?.message || 'NRK error' });
+    return res.status(500).json({ error: e?.message || "NRK error" });
   }
 });
 
+// ---------------------------------------------------------------------------
+// Google Calendar helpers + endpoint
+// ---------------------------------------------------------------------------
 async function getAccessToken(): Promise<string> {
   const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN } = process.env;
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_REFRESH_TOKEN) {
@@ -362,7 +389,6 @@ async function getAccessToken(): Promise<string> {
     grant_type: "refresh_token",
   });
 
-  // let TS infer fetch() response OR annotate with globalThis.Response
   const resp /* : globalThis.Response */ = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -377,16 +403,6 @@ async function getAccessToken(): Promise<string> {
   if (!json.access_token) throw new Error("No access_token in token response");
   return json.access_token;
 }
-
-type GoogleEventItem = {
-  id: string;
-  summary?: string;
-  location?: string;
-  description?: string;
-  htmlLink?: string;
-  start: { date?: string; dateTime?: string; timeZone?: string };
-  end:   { date?: string; dateTime?: string; timeZone?: string };
-};
 
 async function fetchAllEvents(
   accessToken: string,
@@ -437,10 +453,22 @@ app.get("/api/calendar/upcoming", async (req: ExpressRequest, res: ExpressRespon
 
     const now = new Date();
     const defaultStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const defaultEnd   = new Date(defaultStart.getFullYear(), defaultStart.getMonth(), defaultStart.getDate() + 4, 23, 59, 59, 999);
+    const defaultEnd = new Date(
+      defaultStart.getFullYear(),
+      defaultStart.getMonth(),
+      defaultStart.getDate() + 4,
+      23,
+      59,
+      59,
+      999
+    );
 
-    const timeMin = (typeof req.query.timeMin === "string" ? new Date(req.query.timeMin) : defaultStart).toISOString();
-    const timeMax = (typeof req.query.timeMax === "string" ? new Date(req.query.timeMax) : defaultEnd).toISOString();
+    const timeMin = (
+      typeof req.query.timeMin === "string" ? new Date(req.query.timeMin) : defaultStart
+    ).toISOString();
+    const timeMax = (
+      typeof req.query.timeMax === "string" ? new Date(req.query.timeMax) : defaultEnd
+    ).toISOString();
 
     const items = await fetchAllEvents(accessToken, calId, {
       singleEvents: "true",
@@ -451,7 +479,7 @@ app.get("/api/calendar/upcoming", async (req: ExpressRequest, res: ExpressRespon
 
     res.setHeader("Cache-Control", "public, max-age=30");
     res.json({
-      items: items.map(it => ({
+      items: items.map((it) => ({
         id: it.id,
         summary: it.summary,
         location: it.location,
@@ -467,21 +495,73 @@ app.get("/api/calendar/upcoming", async (req: ExpressRequest, res: ExpressRespon
   }
 });
 
-// ---- Presence service -------------------------------------------------------
-const lastSeen = new Map<string, number>(); // for beacon mode
+// ---------------------------------------------------------------------------
+// Presence (ARP / Beacon)
+// ---------------------------------------------------------------------------
+
+// ARP reader (Linux /proc/net/arp, fallback to `arp -an`)
+function readArp(): Array<{ ip: string; mac: string }> {
+  try {
+    const txt = fs.readFileSync("/proc/net/arp", "utf8");
+    const lines = txt.trim().split("\n").slice(1);
+    const rows = lines
+      .map((l) => l.trim().split(/\s+/))
+      .map(([ip, _hwtype, _flags, mac]) => ({ ip, mac: (mac || "").toLowerCase() }))
+      .filter((r) => r.mac && r.mac !== "00:00:00:00:00:00");
+    return rows;
+  } catch {
+    try {
+      const out = execSync("arp -an", { timeout: 1500 }).toString();
+      const rows = [...out.matchAll(/\(([^)]+)\)\s+at\s+([0-9a-f:]+)/gi)].map((m) => ({
+        ip: m[1],
+        mac: m[2].toLowerCase(),
+      }));
+      return rows;
+    } catch {
+      return [];
+    }
+  }
+}
+
+// Optional "nudge" to keep ARP fresh by pinging known IPs
+function pingOnce(ip: string) {
+  if (!ip) return;
+  exec(`ping -c 1 -W 1 ${ip} >/dev/null 2>&1`);
+}
+function warmArpKnownIps() {
+  for (const d of KNOWN_DEVICES) for (const ip of d.ips || []) pingOnce(ip);
+}
+
+let lastArpRows: Array<{ ip: string; mac: string }> = [];
+
+function scanArp() {
+  try {
+    warmArpKnownIps();
+  } catch {}
+  // small delay lets kernel learn neighbors before we read table
+  setTimeout(() => {
+    lastArpRows = readArp();
+  }, 700);
+}
+
+// initial + interval
+scanArp();
+setInterval(scanArp, PRESENCE_SCAN_INTERVAL_SEC * 1000);
+
+// Beacon cache
+const lastSeen = new Map<string, number>();
 
 function computePresence() {
   const now = Date.now();
   const seenVia: Record<string, "arp" | "beacon"> = {};
   const present = new Set<string>();
 
-  // ARP scan (home Wi-Fi)
   if (PRESENCE_MODE === "arp" || PRESENCE_MODE === "auto") {
-  const arp = lastArpRows;
-    const arpMacs = new Set(arp.map((r) => r.mac));
+    const arp = lastArpRows;
+    const arpMacs = new Set(arp.map((r) => r.mac)); // lower-case with colons
     const arpIps = new Set(arp.map((r) => r.ip));
     for (const d of KNOWN_DEVICES) {
-      const macHit = (d.macs || []).some((m) => arpMacs.has(m.toLowerCase()));
+      const macHit = (d.macs || []).some((m) => arpMacs.has(normMac(m)));
       const ipHit = (d.ips || []).some((ip) => arpIps.has(ip));
       if (macHit || ipHit) {
         present.add(d.name);
@@ -490,7 +570,6 @@ function computePresence() {
     }
   }
 
-  // Beacon (hotspot/dev)
   if (PRESENCE_MODE === "beacon" || PRESENCE_MODE === "auto") {
     for (const [name, ts] of lastSeen) {
       if (now - ts <= PRESENCE_TTL_SEC * 1000) {
@@ -509,14 +588,13 @@ function computePresence() {
   };
 }
 
-// GET who is home right now
+// Who is home
 app.get("/api/presence", (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.json(computePresence());
 });
 
-// DEV: beacon from a phone (bookmark this URL on the device)
-// Example: GET /api/presence/beacon?name=Eskil&key=YOURSECRET
+// Beacon ping (dev/hotspot)
 app.get("/api/presence/beacon", (req, res) => {
   const name = String(req.query.name || "").trim();
   const key = String(req.query.key || "");
@@ -527,12 +605,19 @@ app.get("/api/presence/beacon", (req, res) => {
   res.json({ ok: true, name, ttlSec: PRESENCE_TTL_SEC, at: new Date().toISOString() });
 });
 
-// server.ts (above SPA fallback)
-const __dirname2 = path.dirname(fileURLToPath(import.meta.url));
-const OVERLAYS_FILE = process.env.OVERLAYS_FILE
-  ? path.resolve(process.cwd(), process.env.OVERLAYS_FILE)
-  : path.join(__dirname2, "overlays.json");
+// Debug
+app.get("/api/presence/debug", (_req, res) => {
+  res.json({
+    mode: PRESENCE_MODE,
+    knownDevices: KNOWN_DEVICES,
+    arpSample: lastArpRows.slice(0, 100),
+    now: new Date().toISOString(),
+  });
+});
 
+// ---------------------------------------------------------------------------
+// Overlays API
+// ---------------------------------------------------------------------------
 app.get("/api/overlays", (_req, res) => {
   try {
     const raw = fs.existsSync(OVERLAYS_FILE) ? fs.readFileSync(OVERLAYS_FILE, "utf8") : '{"overlays":[]}';
@@ -544,7 +629,6 @@ app.get("/api/overlays", (_req, res) => {
   }
 });
 
-// Optional: allow editing overlays.json from Admin
 app.put("/api/overlays", (req, res) => {
   try {
     const overlays = Array.isArray(req.body?.overlays) ? req.body.overlays : [];
@@ -553,58 +637,22 @@ app.put("/api/overlays", (req, res) => {
         return res.status(400).json({ ok: false, error: "Each overlay needs id and type" });
       }
     }
-    writeJsonAtomic(OVERLAYS_FILE, { overlays }); // OVERLAYS_FILE is defined in your server
+    writeJsonAtomic(OVERLAYS_FILE, { overlays });
     res.json({ ok: true, count: overlays.length });
   } catch (e: any) {
     res.status(400).json({ ok: false, error: e?.message || "Overlays write failed" });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Proxy listening on http://localhost:${PORT}`);
-});
-
-// ---- place this AT THE VERY BOTTOM, after every /api route ----
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const distDir = path.join(__dirname, "frontend", "dist");
-
-// ---- Settings API -----------------------------------------------------------
-const SETTINGS_FILE = process.env.SETTINGS_FILE
-  ? path.resolve(process.cwd(), process.env.SETTINGS_FILE)
-  : path.join(__dirname2, "settings.json");
-
-const DEFAULT_SETTINGS = {
-  viewsEnabled: { dashboard: true, news: true, calendar: true },
-  dayHours: { start: 6, end: 18 },   // local hours where UI is considered "day"
-  calendarDaysAhead: 4,
-  rotateSeconds: 45,
-};
-
-function readJsonSafe(file: string, fallback: any) {
-  try {
-    if (!fs.existsSync(file)) return fallback;
-    const raw = fs.readFileSync(file, "utf8");
-    const j = JSON.parse(raw);
-    return j ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeJsonAtomic(file: string, data: any) {
-  const tmp = `${file}.tmp-${Date.now()}`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2), "utf8");
-  fs.renameSync(tmp, file);
-}
-
-// GET current settings
+// ---------------------------------------------------------------------------
+// Settings API
+// ---------------------------------------------------------------------------
 app.get("/api/settings", (_req, res) => {
   const s = readJsonSafe(SETTINGS_FILE, DEFAULT_SETTINGS);
   res.setHeader("Cache-Control", "no-store");
   res.json(s);
 });
 
-// PUT update settings
 app.put("/api/settings", (req, res) => {
   try {
     const body = req.body || {};
@@ -617,10 +665,10 @@ app.put("/api/settings", (req, res) => {
       },
       dayHours: {
         start: clampInt(body?.dayHours?.start, 0, 23, DEFAULT_SETTINGS.dayHours.start),
-        end:   clampInt(body?.dayHours?.end,   1, 24, DEFAULT_SETTINGS.dayHours.end),
+        end: clampInt(body?.dayHours?.end, 1, 24, DEFAULT_SETTINGS.dayHours.end),
       },
       calendarDaysAhead: clampInt(body.calendarDaysAhead, 0, 14, DEFAULT_SETTINGS.calendarDaysAhead),
-      rotateSeconds:     clampInt(body.rotateSeconds,     5, 600, DEFAULT_SETTINGS.rotateSeconds),
+      rotateSeconds: clampInt(body.rotateSeconds, 5, 600, DEFAULT_SETTINGS.rotateSeconds),
     };
     writeJsonAtomic(SETTINGS_FILE, next);
     res.json({ ok: true, settings: next });
@@ -634,11 +682,98 @@ function clampInt(v: any, min: number, max: number, d: number) {
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : d;
 }
 
+// ---------------------------------------------------------------------------
+// OAuth helper (mint a refresh_token once)
+// ---------------------------------------------------------------------------
+const OAUTH_REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI || `http://localhost:${PORT}/oauth2callback`;
 
-// serve built assets
+app.get("/auth/google/start", (_req, res) => {
+  const { GOOGLE_CLIENT_ID } = process.env;
+  if (!GOOGLE_CLIENT_ID) return res.status(500).send("Missing GOOGLE_CLIENT_ID");
+
+  const scope = "https://www.googleapis.com/auth/calendar.readonly";
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID,
+    redirect_uri: OAUTH_REDIRECT_URI,
+    response_type: "code",
+    access_type: "offline",
+    prompt: "consent",
+    include_granted_scopes: "true",
+    scope,
+  });
+
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+});
+
+app.get("/oauth2callback", async (req, res) => {
+  try {
+    const code = String(req.query.code || "");
+    if (!code) return res.status(400).send("Missing ?code");
+
+    const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } = process.env;
+    if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+      return res.status(500).send("Missing GOOGLE_CLIENT_ID/SECRET");
+    }
+
+    const body = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      client_secret: GOOGLE_CLIENT_SECRET,
+      code,
+      grant_type: "authorization_code",
+      redirect_uri: OAUTH_REDIRECT_URI,
+    });
+
+    const tokenResp /*: globalThis.Response */ = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+
+    const json = await tokenResp.json();
+    console.log("OAuth token response:", json);
+
+    const refresh = json.refresh_token as string | undefined;
+    if (!tokenResp.ok) {
+      return res
+        .status(tokenResp.status)
+        .send(`Token exchange failed (${tokenResp.status}): ${JSON.stringify(json)}`);
+    }
+
+    if (!refresh) {
+      return res
+        .status(400)
+        .send(
+          "No refresh_token returned. Remove this app under https://myaccount.google.com/permissions and try again."
+        );
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.end(`
+      <html><body style="font-family: system-ui; padding:24px">
+        <h2>✅ Got your refresh token</h2>
+        <p>Copy this value into your environment as <code>GOOGLE_REFRESH_TOKEN</code> and restart the server:</p>
+        <pre style="white-space: pre-wrap; word-break: break-all; background:#f4f4f4; padding:12px; border-radius:8px">${refresh}</pre>
+        <p>Access token (short-lived) was also issued; but you only need the refresh token.</p>
+      </body></html>
+    `);
+  } catch (e: any) {
+    res.status(500).send(e?.message || "OAuth callback error");
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Static files & SPA fallback
+// ---------------------------------------------------------------------------
+const distDir = path.join(__dirname, "frontend", "dist");
 app.use(express.static(distDir));
 
-// SPA fallback for non-API routes ONLY (exclude /api/*)
 app.get(/^\/(?!api\/).*/, (_req, res) => {
   res.sendFile(path.join(distDir, "index.html"));
+});
+
+// ---------------------------------------------------------------------------
+// Start server
+// ---------------------------------------------------------------------------
+app.listen(PORT, () => {
+  console.log(`Proxy listening on http://localhost:${PORT}`);
 });

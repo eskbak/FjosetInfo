@@ -6,7 +6,7 @@
       "daily": {
         "tz": "Europe/Oslo",
         "timeStart": "08:00",
-        "timeEnd": "10:00",
+        "timeEnd": "14:00",
         "dateFrom": "2025-08-21",
         "dateTo": "2025-08-22"
       },
