@@ -655,34 +655,77 @@ app.get("/api/presence/debug", (_req, res) => {
 });
 
 
-function speakNorwegian(text: string): Promise<void> {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const dir = await mkdtemp(path.join(os.tmpdir(), "tts-"));
-      const wav = path.join(dir, "say.wav");
-      // espeak-ng will render to a wav file; adjust voice/speed as you like
-      const esArgs = ["-v", "nb+male3", "-s", "150", "-w", wav, text];
-      execFile("espeak-ng", esArgs, (err) => {
-        if (err) return reject(err);
-        execFile("pw-play", [wav], (err2) => {
-          if (err2) return reject(err2);
-          resolve();
-        });
-      });
-    } catch (e) {
-      reject(e);
-    }
-  });
+// ==== Azure TTS: announce "Velkommen hjem, <name>!" as MP3 ===================
+const AZURE_TTS_REGION = process.env.AZURE_TTS_REGION || "";
+const AZURE_TTS_KEY = process.env.AZURE_TTS_KEY || "";
+const AZURE_TTS_VOICE = process.env.AZURE_TTS_VOICE || "nb-NO-IselinNeural";
+
+// IPA phonemes for cleaner Norwegian names
+const NB_NO_PHONEMES: Record<string, string> = {
+  Eskil: "ˈɛskɪl",
+  Sindre: "ˈsɪndɾe",
+  Hallgrim: "ˈhɑlːɡrɪm",
+  Kristian: "ˈkrɪstjɑn",
+  Niklas: "ˈnɪklɑs",
+  Marius: "ˈmɑːrɪʉs", // tweak to your dialect if needed
+};
+
+function ssmlForName(name: string, voice = AZURE_TTS_VOICE) {
+  const safe = (name || "").trim();
+  const ipa = NB_NO_PHONEMES[safe];
+  const sayName = ipa
+    ? `<phoneme alphabet="ipa" ph="${ipa}">${safe}</phoneme>`
+    : safe;
+
+  // Azure SSML with a cheerful express style
+  return `
+<speak version="1.0" xml:lang="nb-NO"
+       xmlns="http://www.w3.org/2001/10/synthesis"
+       xmlns:mstts="https://www.w3.org/2001/mstts">
+  <voice name="${voice}">
+    <mstts:express-as style="cheerful">
+      <prosody rate="+2%" pitch="+2st">
+        ${sayName} er hjemme!
+      </prosody>
+    </mstts:express-as>
+  </voice>
+</speak>`;
 }
 
-app.post("/api/announce", express.json(), async (req, res) => {
+// GET /api/announce/azure?name=Eskil
+app.get("/api/announce/azure", async (req, res) => {
   try {
-    const text = String(req.body?.text || "").trim();
-    if (!text) return res.status(400).json({ error: "Missing text" });
-    await speakNorwegian(text);
-    res.json({ ok: true });
+    if (!AZURE_TTS_REGION || !AZURE_TTS_KEY) {
+      return res.status(500).send("Azure TTS missing config");
+    }
+    const name = String(req.query.name || "").trim();
+    if (!name) return res.status(400).send("Missing ?name");
+
+    const ssml = ssmlForName(name);
+    const url = `https://${AZURE_TTS_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
+
+    const r /*: globalThis.Response */ = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/ssml+xml",
+        "X-Microsoft-OutputFormat": "audio-24khz-96kbitrate-mono-mp3",
+        "Ocp-Apim-Subscription-Key": AZURE_TTS_KEY,
+      },
+      body: ssml,
+    });
+
+    if (!r.ok) {
+      const text = await r.text().catch(() => "");
+      return res.status(r.status).send(`Azure TTS failed (${r.status}): ${text}`);
+    }
+
+    // Stream MP3 to client
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Cache-Control", "no-store");
+    const buf = Buffer.from(await r.arrayBuffer());
+    res.send(buf);
   } catch (e: any) {
-    res.status(500).json({ error: e?.message || "announce failed" });
+    res.status(500).send(e?.message || "Azure TTS error");
   }
 });
 

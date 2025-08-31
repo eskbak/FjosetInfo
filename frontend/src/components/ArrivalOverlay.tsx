@@ -4,42 +4,78 @@ import { useEffect, useRef, useState } from "react";
 type Props = {
   name: string;
   onClose: () => void;
-  durationMs?: number;         // how long it stays fully visible before closing
-  speak?: boolean;             // enable audio announcement (default true)
-  announceEndpoint?: string;   // override announce endpoint if needed
+  durationMs?: number; // how long the overlay stays fully visible
 };
 
 export default function ArrivalOverlay({
   name,
   onClose,
   durationMs = 9000,
-  speak = true,
-  announceEndpoint, // defaulted in effect
 }: Props) {
   const [closing, setClosing] = useState(false);
   const closedRef = useRef(false);
   const mainTimerRef = useRef<number | null>(null);
   const watchdogRef = useRef<number | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const urlRef = useRef<string | null>(null);
 
   const close = () => {
     if (closedRef.current) return;
     closedRef.current = true;
     setClosing(true);
-    // allow fade-out
+    // fade-out then finish
     window.setTimeout(() => {
       try { onClose(); } catch {}
     }, 450);
   };
 
+  // Fetch Azure MP3 and play once
   useEffect(() => {
-    // main auto-close
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const r = await fetch(`/api/announce/azure?name=${encodeURIComponent(name)}`, { cache: "no-store" });
+        if (!r.ok) throw new Error("Azure TTS fetch failed");
+        const blob = await r.blob();
+        if (cancelled) return;
+
+        const url = URL.createObjectURL(blob);
+        urlRef.current = url;
+
+        const a = new Audio(url);
+        a.preload = "auto";
+        a.volume = 1.0;
+        audioRef.current = a;
+
+        // try play; ignore user-gesture errors (kiosk likely allows autoplay)
+        a.play().catch(() => {});
+      } catch {
+        // optional: fallback to Web Speech API (browser TTS) if you want:
+        // const u = new SpeechSynthesisUtterance(`Velkommen hjem, ${name}!`);
+        // u.lang = "nb-NO";
+        // speechSynthesis.speak(u);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (audioRef.current) {
+        try { audioRef.current.pause(); } catch {}
+      }
+      if (urlRef.current) {
+        URL.revokeObjectURL(urlRef.current);
+        urlRef.current = null;
+      }
+    };
+  }, [name]);
+
+  // Timers / close logic
+  useEffect(() => {
     mainTimerRef.current = window.setTimeout(close, durationMs) as unknown as number;
-    // watchdog (in case something stalls)
     watchdogRef.current = window.setTimeout(close, durationMs + 4000) as unknown as number;
 
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
     window.addEventListener("keydown", onKey);
 
     return () => {
@@ -48,48 +84,7 @@ export default function ArrivalOverlay({
       if (watchdogRef.current) window.clearTimeout(watchdogRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [durationMs]); // onClose identity can change in React, but we guard with closedRef
-
-  // --- NEW: fire-and-forget audio announcement on mount ---
-  useEffect(() => {
-    if (!speak) return;
-
-    const controller = new AbortController();
-    const signal = controller.signal;
-
-    const say = async (text: string) => {
-      const epPrimary = announceEndpoint || "/api/announce_duck";
-      const epFallback = "/api/announce";
-      try {
-        // try primary (ducking Spotify if you wired that endpoint)
-        const r = await fetch(epPrimary, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
-          signal,
-        });
-        if (!r.ok) throw new Error(`announce_duck failed ${r.status}`);
-      } catch {
-        // fallback to plain announce if available
-        try {
-          const r2 = await fetch(epFallback, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text }),
-            signal,
-          });
-          // ignore success/failure here; overlay shouldn't be blocked by audio
-          void r2;
-        } catch {
-          // swallow
-        }
-      }
-    };
-
-    say(`${name} er hjemme!`);
-
-    return () => controller.abort();
-  }, [name, speak, announceEndpoint]);
+  }, [durationMs]);
 
   return (
     <div
@@ -112,7 +107,6 @@ export default function ArrivalOverlay({
       <style>{`
 @keyframes overlayFadeIn { from { opacity: 0 } to { opacity: 1 } }
 @keyframes overlayFadeOut { from { opacity: 1 } to { opacity: 0 } }
-
 @keyframes popIn {
   0% { transform: translateY(20px) scale(0.96); opacity: 0 }
   45% { transform: translateY(0) scale(1.04); opacity: 1 }
@@ -120,7 +114,6 @@ export default function ArrivalOverlay({
 }
       `}</style>
 
-      {/* Center card */}
       <div
         style={{
           background: "rgba(255,255,255,0.10)",
