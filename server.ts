@@ -685,7 +685,7 @@ function buildSSML(text: string, voice = AZURE_TTS_VOICE) {
 <speak version="1.0" xml:lang="nb-NO" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts">
   <voice name="${voice}">
     <mstts:express-as style="cheerful">
-      <prosody rate="+2%" pitch="+2st">${safe}</prosody>
+      <prosody rate="-2%>${safe}</prosody>
     </mstts:express-as>
   </voice>
 </speak>`.trim();
