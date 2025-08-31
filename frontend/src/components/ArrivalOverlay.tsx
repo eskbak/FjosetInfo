@@ -10,7 +10,7 @@ type Props = {
   speakOnMount?: boolean;
   /**
    * The phrase to speak. You can pass a string or a function that receives the name.
-   * Defaults to: "Velkommen hjem, {name}!"
+   * Defaults to: "{name} er hjemme!"
    */
   phrase?: string | ((name: string) => string);
   /** Optional Azure voice override, e.g. "nb-NO-IselinNeural" */

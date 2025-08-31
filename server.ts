@@ -661,7 +661,7 @@ import crypto from "crypto";
 // ENV
 const AZURE_TTS_REGION = process.env.AZURE_TTS_REGION || "";                 // e.g. "westeurope"
 const AZURE_TTS_KEY    = process.env.AZURE_TTS_KEY || "";                    // your Speech key
-const AZURE_TTS_VOICE  = process.env.AZURE_TTS_VOICE || "nb-NO-IselinNeural";
+const AZURE_TTS_VOICE  = process.env.AZURE_TTS_VOICE || "nb-NO-FinnNeural";
 const AZURE_TTS_FORMAT = process.env.AZURE_TTS_FORMAT || "audio-24khz-48kbitrate-mono-mp3";
 const AUDIO_PLAYER     = process.env.AUDIO_PLAYER || "mpg123";               // or "mpv", "omxplayer", etc.
 
