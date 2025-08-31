@@ -18,6 +18,17 @@ const AVATARS: Record<string, string> = {
   Marius: fallbackPng,
 };
 
+// at top of the component file
+const emojiStyle: React.CSSProperties = {
+  // force an emoji font; fall back to system if not available
+  fontFamily:
+    '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",system-ui,sans-serif',
+  fontWeight: 400,     // avoid bold on emoji (some stacks flake)
+  letterSpacing: 0,    // spacing can break certain multi-codepoint emoji
+  lineHeight: 1,       // tighter baseline for emoji
+  display: "inline-block",
+};
+
 type Props = {
   name: string;
   onClose: () => void;
@@ -189,16 +200,18 @@ export default function ArrivalOverlay({
           />
         </div>
 
-        <div
-          style={{
-            fontSize: "clamp(28px, 5.2vw, 56px)",
-            letterSpacing: 1,
-            opacity: 0.95,
-            marginBottom: 6,
-          }}
-        >
-          🎉 Velkommen hjem! 🎉
-        </div>
+<div
+  style={{
+    fontSize: "clamp(28px, 5.2vw, 56px)",
+    letterSpacing: 1,
+    opacity: 0.95,
+    marginBottom: 6,
+  }}
+>
+  <span style={emojiStyle}>🎉</span>
+  &nbsp;Velkommen hjem!&nbsp;
+  <span style={emojiStyle}>🎉</span>
+</div>
         <div
           style={{
             fontSize: "clamp(44px, 9vw, 96px)",
@@ -207,7 +220,7 @@ export default function ArrivalOverlay({
             letterSpacing: -1,
           }}
         >
-          {name} er hjemme
+          {name} er hjemme!
         </div>
       </div>
     </div>
