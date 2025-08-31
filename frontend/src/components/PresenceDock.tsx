@@ -3,9 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 
 // --- IMPORT YOUR PNGs HERE ---
 import eskilPng from "../assets/avatars/eskil.png?url";
-// import sindrePng from "../assets/avatars/sindre.png?url";
+import sindrePng from "../assets/avatars/sindre.png?url";
 // import hallgrimPng from "../assets/avatars/hallgrim.png?url";
-// import kristianPng from "../assets/avatars/kristian.png?url";
+import kristianPng from "../assets/avatars/kristian.png?url";
 // import niklasPng from "../assets/avatars/niklas.png?url";
 // import mariusPng from "../assets/avatars/marius.png?url";
 import fallbackPng from "../assets/avatars/fallback.png?url";
@@ -13,9 +13,9 @@ import fallbackPng from "../assets/avatars/fallback.png?url";
 // Map KNOWN_DEVICES "name" -> image
 const AVATARS: Record<string, string> = {
   Eskil: eskilPng,
-  Sindre: eskilPng,
+  Sindre: sindrePng,
   Hallgrim: eskilPng,
-  Kristian: eskilPng,
+  Kristian: kristianPng,
   Niklas: eskilPng,
   Marius: eskilPng,
 };
