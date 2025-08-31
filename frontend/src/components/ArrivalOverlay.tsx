@@ -1,6 +1,23 @@
 // components/ArrivalOverlay.tsx
 import { useEffect, useRef, useState } from "react";
 
+// --- OPTIONAL avatar imports (add yours as you create the files) ---
+import eskilPng from "../assets/avatars/eskil.png?url";
+import sindrePng from "../assets/avatars/sindre.png?url";
+import kristianPng from "../assets/avatars/kristian.png?url";
+import fallbackPng from "../assets/avatars/fallback.png?url";
+
+// Map of KNOWN_DEVICES name -> avatar image.
+// Update these as you add files (e.g., sindre.png, hallgrim.png, etc.)
+const AVATARS: Record<string, string> = {
+  Eskil: eskilPng,
+  Sindre: sindrePng,
+  Hallgrim: fallbackPng,
+  Kristian: kristianPng,
+  Niklas: fallbackPng,
+  Marius: fallbackPng,
+};
+
 type Props = {
   name: string;
   onClose: () => void;
@@ -15,6 +32,8 @@ type Props = {
   phrase?: string | ((name: string) => string);
   /** Optional Azure voice override, e.g. "nb-NO-IselinNeural" */
   voice?: string;
+  /** Override avatar image directly (optional). */
+  avatarSrc?: string;
 };
 
 export default function ArrivalOverlay({
@@ -24,6 +43,7 @@ export default function ArrivalOverlay({
   speakOnMount = true,
   phrase,
   voice,
+  avatarSrc,
 }: Props) {
   const [closing, setClosing] = useState(false);
 
@@ -42,7 +62,7 @@ export default function ArrivalOverlay({
     }, 450);
   };
 
-  // 🔊 Tell the server to speak (no browser audio/autoplay issues)
+  // 🔊 Tell the server to speak (server-side playback on the Pi)
   useEffect(() => {
     if (!speakOnMount) return;
 
@@ -51,11 +71,9 @@ export default function ArrivalOverlay({
         ? phrase(name)
         : phrase || `${name} er hjemme!`;
 
-    // fire-and-forget; server will queue/play via mpg123 (or your configured player)
     fetch("/api/tts/play", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // you can also include { voice } when you want to override default server voice
       body: JSON.stringify(voice ? { text, voice } : { text }),
       keepalive: true,
     }).catch(() => {
@@ -76,6 +94,8 @@ export default function ArrivalOverlay({
       if (watchdogRef.current) window.clearTimeout(watchdogRef.current);
     };
   }, [durationMs]);
+
+  const src = avatarSrc || AVATARS[name] || fallbackPng;
 
   return (
     <div
@@ -98,13 +118,26 @@ export default function ArrivalOverlay({
       <style>{`
 @keyframes overlayFadeIn { from { opacity: 0 } to { opacity: 1 } }
 @keyframes overlayFadeOut { from { opacity: 1 } to { opacity: 0 } }
+
 @keyframes popIn {
   0% { transform: translateY(20px) scale(0.96); opacity: 0 }
   45% { transform: translateY(0) scale(1.04); opacity: 1 }
   100% { transform: translateY(0) scale(1) }
 }
+
+@keyframes avatarPop {
+  0%   { transform: translateY(40px) scale(0.92); opacity: 0 }
+  55%  { transform: translateY(-6px) scale(1.06); opacity: 1 }
+  100% { transform: translateY(0) scale(1) }
+}
+
+@keyframes pulseHalo {
+  0%, 100% { transform: scale(1); opacity: 0.65 }
+  50% { transform: scale(1.08); opacity: 0.95 }
+}
       `}</style>
 
+      {/* Card */}
       <div
         style={{
           background: "rgba(255,255,255,0.10)",
@@ -115,7 +148,7 @@ export default function ArrivalOverlay({
           textAlign: "center",
           color: "white",
           maxWidth: 980,
-          width: "min(70vw, 980px)",
+          width: "min(78vw, 980px)",
           animation: closing ? undefined : "popIn 650ms cubic-bezier(.2,.8,.2,1)",
           boxShadow: "0 30px 90px rgba(0,0,0,0.45)",
           transition: "transform 220ms ease, opacity 220ms ease",
@@ -123,11 +156,44 @@ export default function ArrivalOverlay({
           opacity: closing ? 0.85 : 1,
         }}
       >
+        {/* Avatar + halo */}
+        <div style={{ position: "relative", display: "inline-block", marginBottom: 16 }}>
+          {/* soft halo behind the avatar */}
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              inset: "-10%",
+              borderRadius: "9999px",
+              background: "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.35), rgba(255,255,255,0.05) 60%, transparent 70%)",
+              filter: "blur(8px)",
+              animation: closing ? undefined : "pulseHalo 1600ms ease-in-out infinite",
+            }}
+          />
+          <img
+            src={src}
+            alt={name}
+            title={name}
+            style={{
+              width: "min(38vw, 340px)",
+              height: "auto",
+              objectFit: "contain",
+              imageRendering: "auto",
+              filter: "drop-shadow(0 8px 22px rgba(0,0,0,0.45))",
+              borderRadius: 16,     // if your PNGs are already masked, you can set this to 0
+              animation: closing ? undefined : "avatarPop 600ms cubic-bezier(.2,.8,.2,1)",
+              willChange: "transform, filter, opacity",
+            }}
+            loading="eager"
+            decoding="async"
+          />
+        </div>
+
         <div
           style={{
-            fontSize: "clamp(31px, 6vw, 64px)",
+            fontSize: "clamp(28px, 5.2vw, 56px)",
             letterSpacing: 1,
-            opacity: 0.9,
+            opacity: 0.95,
             marginBottom: 6,
           }}
         >
