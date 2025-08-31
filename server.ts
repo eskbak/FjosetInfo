@@ -710,7 +710,7 @@ app.get("/api/announce/azure/simple", async (req, res) => {
     const voice = String(req.query.voice || AZURE_TTS_VOICE);
     const ssml = `
 <speak version="1.0" xml:lang="nb-NO" xmlns="http://www.w3.org/2001/10/synthesis">
-  <voice name="${voice}">Velkommen hjem, ${name}!</voice>
+  <voice name="${voice}">${name} er hjemme!</voice>
 </speak>`.trim();
 
     const url = `https://${AZURE_TTS_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
@@ -770,7 +770,7 @@ function buildRichSSML(name: string, voice: string) {
        xmlns:mstts="https://www.w3.org/2001/mstts">
   <voice name="${voice}">
     <mstts:express-as style="cheerful">
-      <prosody rate="+2%" pitch="+2st">Velkommen hjem, ${sayName}!</prosody>
+      <prosody rate="+2%" pitch="+2st">${sayName} er hjemme!</prosody>
     </mstts:express-as>
   </voice>
 </speak>`.trim();
