@@ -74,23 +74,20 @@ export default function ArrivalOverlay({
   };
 
   // 🔊 Tell the server to speak (server-side playback on the Pi)
-  useEffect(() => {
-    if (!speakOnMount) return;
+useEffect(() => {
+  if (!speakOnMount) return;
+  const h = new Date().getHours();
+  if (h < 9 || h >= 22) return; // client-side guard (keep in sync with server env if you change it)
 
-    const text =
-      typeof phrase === "function"
-        ? phrase(name)
-        : phrase || `${name} er hjemme!`;
+  const text = typeof phrase === "function" ? phrase(name) : (phrase || `${name} er hjemme!`);
+  fetch("/api/tts/play", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(voice ? { text, voice } : { text }),
+    keepalive: true,
+  }).catch(() => {});
+}, [name, speakOnMount, phrase, voice]);
 
-    fetch("/api/tts/play", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(voice ? { text, voice } : { text }),
-      keepalive: true,
-    }).catch(() => {
-      // ignore; overlay still shows even if TTS fails
-    });
-  }, [name, speakOnMount, phrase, voice]);
 
   // Auto-close + watchdog + Esc to dismiss
   useEffect(() => {
