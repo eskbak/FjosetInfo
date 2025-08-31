@@ -6,7 +6,7 @@ import eskilPng from "../assets/avatars/eskil.png?url";
 import sindrePng from "../assets/avatars/sindre.png?url";
 // import hallgrimPng from "../assets/avatars/hallgrim.png?url";
 import kristianPng from "../assets/avatars/kristian.png?url";
-// import niklasPng from "../assets/avatars/niklas.png?url";
+import niklasPng from "../assets/avatars/niklas.png?url";
 // import mariusPng from "../assets/avatars/marius.png?url";
 import fallbackPng from "../assets/avatars/fallback.png?url";
 
@@ -16,7 +16,7 @@ const AVATARS: Record<string, string> = {
   Sindre: sindrePng,
   Hallgrim: eskilPng,
   Skurken: kristianPng,
-  Niklas: eskilPng,
+  Niklas: niklasPng,
   Marius: eskilPng,
 };
 
