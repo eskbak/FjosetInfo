@@ -8,8 +8,13 @@ type Props = {
   durationMs?: number;
   /** Ask the server to speak when the overlay opens. */
   speakOnMount?: boolean;
-  /** Unused with server-side audio (volume handled on the Pi). */
-  volume?: number;
+  /**
+   * The phrase to speak. You can pass a string or a function that receives the name.
+   * Defaults to: "Velkommen hjem, {name}!"
+   */
+  phrase?: string | ((name: string) => string);
+  /** Optional Azure voice override, e.g. "nb-NO-IselinNeural" */
+  voice?: string;
 };
 
 export default function ArrivalOverlay({
@@ -17,6 +22,8 @@ export default function ArrivalOverlay({
   onClose,
   durationMs = 9000,
   speakOnMount = true,
+  phrase,
+  voice,
 }: Props) {
   const [closing, setClosing] = useState(false);
 
@@ -39,16 +46,22 @@ export default function ArrivalOverlay({
   useEffect(() => {
     if (!speakOnMount) return;
 
-    // fire-and-forget; server will queue/play via mpg123
-    fetch("/api/announce/azure/play", {
+    const text =
+      typeof phrase === "function"
+        ? phrase(name)
+        : phrase || `${name} er hjemme!`;
+
+    // fire-and-forget; server will queue/play via mpg123 (or your configured player)
+    fetch("/api/tts/play", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
-      keepalive: true, // harmless here; ensures request isn't dropped on quick navigations
+      // you can also include { voice } when you want to override default server voice
+      body: JSON.stringify(voice ? { text, voice } : { text }),
+      keepalive: true,
     }).catch(() => {
       // ignore; overlay still shows even if TTS fails
     });
-  }, [name, speakOnMount]);
+  }, [name, speakOnMount, phrase, voice]);
 
   // Auto-close + watchdog + Esc to dismiss
   useEffect(() => {
