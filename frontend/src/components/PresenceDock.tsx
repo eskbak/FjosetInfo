@@ -29,7 +29,7 @@ type Props = {
 
 export default function PresenceDock({
   zIndex = 1800,
-  gapPx = 12,
+  gapPx = -10,
   minSizePx = 150,
   maxSizePx = 220,
 }: Props) {
