@@ -655,56 +655,68 @@ app.get("/api/presence/debug", (_req, res) => {
 });
 
 
-// ==== Azure TTS: announce "Velkommen hjem, <name>!" as MP3 ===================
+// ===== Azure Speech config =====
 const AZURE_TTS_REGION = process.env.AZURE_TTS_REGION || "";
 const AZURE_TTS_KEY = process.env.AZURE_TTS_KEY || "";
 const AZURE_TTS_VOICE = process.env.AZURE_TTS_VOICE || "nb-NO-IselinNeural";
 
-// IPA phonemes for cleaner Norwegian names
-const NB_NO_PHONEMES: Record<string, string> = {
-  Eskil: "ˈɛskɪl",
-  Sindre: "ˈsɪndɾe",
-  Hallgrim: "ˈhɑlːɡrɪm",
-  Kristian: "ˈkrɪstjɑn",
-  Niklas: "ˈnɪklɑs",
-  Marius: "ˈmɑːrɪʉs", // tweak to your dialect if needed
-};
-
-function ssmlForName(name: string, voice = AZURE_TTS_VOICE) {
-  const safe = (name || "").trim();
-  const ipa = NB_NO_PHONEMES[safe];
-  const sayName = ipa
-    ? `<phoneme alphabet="ipa" ph="${ipa}">${safe}</phoneme>`
-    : safe;
-
-  // Azure SSML with a cheerful express style
-  return `
-<speak version="1.0" xml:lang="nb-NO"
-       xmlns="http://www.w3.org/2001/10/synthesis"
-       xmlns:mstts="https://www.w3.org/2001/mstts">
-  <voice name="${voice}">
-    <mstts:express-as style="cheerful">
-      <prosody rate="+2%" pitch="+2st">
-        ${sayName} er hjemme!
-      </prosody>
-    </mstts:express-as>
-  </voice>
-</speak>`;
+// Get an OAuth token (fallback path) for Speech
+async function azureIssueToken() {
+  if (!AZURE_TTS_REGION || !AZURE_TTS_KEY) throw new Error("Missing AZURE_TTS_REGION or AZURE_TTS_KEY");
+  const url = `https://${AZURE_TTS_REGION}.api.cognitive.microsoft.com/sts/v1.0/issueToken`;
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Ocp-Apim-Subscription-Key": AZURE_TTS_KEY },
+  });
+  if (!r.ok) throw new Error(`token ${r.status}: ${await r.text().catch(() => "")}`);
+  return r.text();
 }
 
-// GET /api/announce/azure?name=Eskil
-app.get("/api/announce/azure", async (req, res) => {
-  try {
-    if (!AZURE_TTS_REGION || !AZURE_TTS_KEY) {
-      return res.status(500).send("Azure TTS missing config");
-    }
-    const name = String(req.query.name || "").trim();
-    if (!name) return res.status(400).send("Missing ?name");
+// Quick debug: shows region, voice and key length (not the key)
+app.get("/api/announce/azure/debug", (_req, res) => {
+  res.json({
+    region: AZURE_TTS_REGION || "(missing)",
+    voice: AZURE_TTS_VOICE,
+    keyPresent: !!AZURE_TTS_KEY,
+    keyLength: AZURE_TTS_KEY.length,
+  });
+});
 
-    const ssml = ssmlForName(name);
+// List voices available in your region (useful to verify the region/key)
+app.get("/api/announce/azure/voices", async (_req, res) => {
+  try {
+    if (!AZURE_TTS_REGION || !AZURE_TTS_KEY) return res.status(500).send("Missing AZURE_TTS_REGION or AZURE_TTS_KEY");
+
+    const url = `https://${AZURE_TTS_REGION}.tts.speech.microsoft.com/cognitiveservices/voices/list`;
+    // Try direct key first
+    let r = await fetch(url, { headers: { "Ocp-Apim-Subscription-Key": AZURE_TTS_KEY } });
+    if (r.status === 401) {
+      // Fallback to Bearer token
+      const token = await azureIssueToken();
+      r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    }
+    const body = await r.text();
+    res.status(r.status).type(r.headers.get("content-type") || "application/json").send(body);
+  } catch (e: any) {
+    res.status(500).send(e?.message || "voices list error");
+  }
+});
+// ---------------------------------------------------------------------------
+
+app.get("/api/announce/azure/simple", async (req, res) => {
+  try {
+    if (!AZURE_TTS_REGION || !AZURE_TTS_KEY) return res.status(500).send("Azure TTS missing config");
+    const name = String(req.query.name || "").trim() || "venn";
+    const voice = String(req.query.voice || AZURE_TTS_VOICE);
+    const ssml = `
+<speak version="1.0" xml:lang="nb-NO" xmlns="http://www.w3.org/2001/10/synthesis">
+  <voice name="${voice}">Velkommen hjem, ${name}!</voice>
+</speak>`.trim();
+
     const url = `https://${AZURE_TTS_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
 
-    const r /*: globalThis.Response */ = await fetch(url, {
+    // Try with key header; if 401, retry with Bearer token
+    let r = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/ssml+xml",
@@ -714,20 +726,101 @@ app.get("/api/announce/azure", async (req, res) => {
       body: ssml,
     });
 
-    if (!r.ok) {
-      const text = await r.text().catch(() => "");
-      return res.status(r.status).send(`Azure TTS failed (${r.status}): ${text}`);
+    if (r.status === 401) {
+      const token = await azureIssueToken();
+      r = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/ssml+xml",
+          "X-Microsoft-OutputFormat": "audio-24khz-96kbitrate-mono-mp3",
+          Authorization: `Bearer ${token}`,
+        },
+        body: ssml,
+      });
     }
 
-    // Stream MP3 to client
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!r.ok) return res.status(r.status).type("text/plain; charset=utf-8").send(buf.toString("utf8"));
+
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
-    const buf = Buffer.from(await r.arrayBuffer());
     res.send(buf);
   } catch (e: any) {
     res.status(500).send(e?.message || "Azure TTS error");
   }
 });
+
+
+// IPA phonemes for cleaner Norwegian names
+const NB_NO_PHONEMES: Record<string, string> = {
+  Eskil: "ˈɛskɪl",
+  Sindre: "ˈsɪndɾe",
+  Hallgrim: "ˈhɑlːɡrɪm",
+  Kristian: "ˈkrɪstjɑn",
+  Niklas: "ˈnɪklɑs",
+  Marius: "ˈmɑːrɪʉs",
+};
+
+function buildRichSSML(name: string, voice: string) {
+  const ipa = NB_NO_PHONEMES[name];
+  const sayName = ipa ? `<phoneme alphabet="ipa" ph="${ipa}">${name}</phoneme>` : name;
+  return `
+<speak version="1.0" xml:lang="nb-NO"
+       xmlns="http://www.w3.org/2001/10/synthesis"
+       xmlns:mstts="https://www.w3.org/2001/mstts">
+  <voice name="${voice}">
+    <mstts:express-as style="cheerful">
+      <prosody rate="+2%" pitch="+2st">Velkommen hjem, ${sayName}!</prosody>
+    </mstts:express-as>
+  </voice>
+</speak>`.trim();
+}
+
+app.get("/api/announce/azure", async (req, res) => {
+  try {
+    if (!AZURE_TTS_REGION || !AZURE_TTS_KEY) return res.status(500).send("Azure TTS missing config");
+    const name = String(req.query.name || "").trim() || "venn";
+    const voice = String(req.query.voice || AZURE_TTS_VOICE);
+    const ssml = buildRichSSML(name, voice);
+
+    const url = `https://${AZURE_TTS_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
+
+    // Try key header first
+    let r = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/ssml+xml",
+        "X-Microsoft-OutputFormat": "audio-24khz-96kbitrate-mono-mp3",
+        "Ocp-Apim-Subscription-Key": AZURE_TTS_KEY,
+      },
+      body: ssml,
+    });
+
+    // Fallback to Bearer token on 401
+    if (r.status === 401) {
+      const token = await azureIssueToken();
+      r = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/ssml+xml",
+          "X-Microsoft-OutputFormat": "audio-24khz-96kbitrate-mono-mp3",
+          Authorization: `Bearer ${token}`,
+        },
+        body: ssml,
+      });
+    }
+
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!r.ok) return res.status(r.status).type("text/plain; charset=utf-8").send(buf.toString("utf8"));
+
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(buf);
+  } catch (e: any) {
+    res.status(500).send(e?.message || "Azure TTS error");
+  }
+});
+
 
 // ---------------------------------------------------------------------------
 // Overlays API
