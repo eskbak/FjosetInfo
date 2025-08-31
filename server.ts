@@ -660,7 +660,7 @@ import crypto from "crypto";
 
 // ENV
 const AZURE_TTS_REGION = process.env.AZURE_TTS_REGION || "";                 // e.g. "westeurope"
-const AZURE_TTS_KEY    = process.env.AZURE_TTS_KEY || "";                    // your Speech key
+const AZURE_TTS_KEY    = process.env.AZURE_TTS_KEY || "";                    // Speech key
 const AZURE_TTS_VOICE  = process.env.AZURE_TTS_VOICE || "nb-NO-FinnNeural";
 const AZURE_TTS_FORMAT = process.env.AZURE_TTS_FORMAT || "audio-24khz-48kbitrate-mono-mp3";
 const AUDIO_PLAYER     = process.env.AUDIO_PLAYER || "mpg123";               // or "mpv", "omxplayer", etc.
@@ -669,47 +669,48 @@ const AUDIO_PLAYER     = process.env.AUDIO_PLAYER || "mpg123";               // 
 const TTS_CACHE_DIR = process.env.TTS_CACHE_DIR || path.join(os.tmpdir(), "tts-cache");
 fs.mkdirSync(TTS_CACHE_DIR, { recursive: true });
 
-// Helpers
-function xmlEscape(s: string) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function buildRichSSML(text: string, voice: string, opts?: {
-  rate?: string;     // e.g. "-6%"
-  pitch?: string;    // e.g. "-1st"
-  style?: string;    // e.g. "friendly" | "cheerful" | "calm" | "general"
-  styledegree?: number; // 0.01–2.0 (1 = default)
-  volume?: string;   // e.g. "+0dB" | "-2dB"
-}) {
-  const rate = opts?.rate ?? "-6%";
-  const pitch = opts?.pitch ?? "-1st";
-  const style = opts?.style ?? "cheerful";        // softer than "cheerful"
-  const styledegree = opts?.styledegree ?? 0.7;   // dial down expressiveness
+// ---- SSML builder (safe & flexible) ----
+function buildSSML(
+  text: string,
+  voice: string,
+  opts?: {
+    rate?: string;        // "-6%", "+3%"
+    pitch?: string;       // "-1st", "+2st"
+    volume?: string;      // "+0dB", "-2dB"
+    style?: string;       // "general", "cheerful", ...
+    styledegree?: number; // 0.01–2.0
+    breakMs?: number;     // extra pause after text
+  }
+) {
+  const safe = text.replace(/[<&>]/g, (m) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[m]!));
+  const rate   = opts?.rate   ?? "-6%";
+  const pitch  = opts?.pitch  ?? "-1st";
   const volume = opts?.volume ?? "+0dB";
 
-  const safe = text.replace(/[<&>]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]!));
+  const prosody =
+    `<prosody rate="${rate}" pitch="${pitch}" volume="${volume}">` +
+      safe +
+      (opts?.breakMs ? `<break time="${Math.max(0, Math.floor(opts.breakMs))}ms"/>` : ``) +
+    `</prosody>`;
+
+  let inner = prosody;
+  if (opts?.style) {
+    const sd = Number.isFinite(opts.styledegree as number) ? ` styledegree="${opts!.styledegree}"` : "";
+    inner = `<mstts:express-as style="${opts.style}"${sd}>${prosody}</mstts:express-as>`;
+  }
 
   return `
 <speak version="1.0" xml:lang="nb-NO"
        xmlns="http://www.w3.org/2001/10/synthesis"
        xmlns:mstts="https://www.w3.org/2001/mstts">
   <voice name="${voice}">
-    <mstts:express-as style="${style}" styledegree="${styledegree}">
-      <prosody rate="${rate}" pitch="${pitch}" volume="${volume}">
-        ${safe}
-      </prosody>
-    </mstts:express-as>
+    ${inner}
   </voice>
 </speak>`.trim();
 }
 
-
 async function issueToken(): Promise<string> {
+  if (!AZURE_TTS_REGION || !AZURE_TTS_KEY) throw new Error("Azure TTS not configured");
   const url = `https://${AZURE_TTS_REGION}.api.cognitive.microsoft.com/sts/v1.0/issueToken`;
   const r = await fetch(url, { method: "POST", headers: { "Ocp-Apim-Subscription-Key": AZURE_TTS_KEY } });
   if (!r.ok) throw new Error(`Token ${r.status}: ${await r.text().catch(() => "")}`);
@@ -718,22 +719,31 @@ async function issueToken(): Promise<string> {
 
 async function synthesize(text: string, voice = AZURE_TTS_VOICE): Promise<Buffer> {
   if (!AZURE_TTS_REGION || !AZURE_TTS_KEY) throw new Error("Azure TTS not configured");
-  const ssml = buildRichSSML(text, voice);
+
+  const ssml = buildSSML(text, voice);
   const url = `https://${AZURE_TTS_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
 
-  // Try with key
+  // Try with key first
   let r = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/ssml+xml", "X-Microsoft-OutputFormat": AZURE_TTS_FORMAT, "Ocp-Apim-Subscription-Key": AZURE_TTS_KEY },
+    headers: {
+      "Content-Type": "application/ssml+xml",
+      "X-Microsoft-OutputFormat": AZURE_TTS_FORMAT,
+      "Ocp-Apim-Subscription-Key": AZURE_TTS_KEY,
+    },
     body: ssml,
   });
 
-  // Fallback: bearer token
+  // Fallback to bearer token on 401
   if (r.status === 401) {
     const token = await issueToken();
     r = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/ssml+xml", "X-Microsoft-OutputFormat": AZURE_TTS_FORMAT, Authorization: `Bearer ${token}` },
+      headers: {
+        "Content-Type": "application/ssml+xml",
+        "X-Microsoft-OutputFormat": AZURE_TTS_FORMAT,
+        Authorization: `Bearer ${token}`,
+      },
       body: ssml,
     });
   }
@@ -742,6 +752,7 @@ async function synthesize(text: string, voice = AZURE_TTS_VOICE): Promise<Buffer
     const t = await r.text().catch(() => "");
     throw new Error(`Azure TTS ${r.status}: ${t}`);
   }
+
   const ab = await r.arrayBuffer();
   return Buffer.from(ab);
 }
@@ -749,6 +760,7 @@ async function synthesize(text: string, voice = AZURE_TTS_VOICE): Promise<Buffer
 function cacheKey(text: string, voice: string) {
   return crypto.createHash("sha1").update(`${voice}\n${text}`).digest("hex") + ".mp3";
 }
+
 async function ensureCachedMp3(text: string, voice: string): Promise<string> {
   const file = path.join(TTS_CACHE_DIR, cacheKey(text, voice));
   if (!fs.existsSync(file) || fs.statSync(file).size === 0) {
@@ -758,12 +770,13 @@ async function ensureCachedMp3(text: string, voice: string): Promise<string> {
   return file;
 }
 
-// 1) Stream MP3 to the client (use this for browser playback)
+// 1) Stream MP3 to the client (browser playback)
 app.get("/api/tts", async (req, res) => {
   try {
     const text = String(req.query.text || "").trim();
     if (!text) return res.status(400).send("Missing ?text");
     const voice = String(req.query.voice || AZURE_TTS_VOICE);
+
     const buf = await synthesize(text, voice);
     res.setHeader("Content-Type", "audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
@@ -774,8 +787,9 @@ app.get("/api/tts", async (req, res) => {
 });
 
 // 2) Play on the Pi’s speakers (server-side)
-app.post("/api/tts/play", express.json(), async (req, res) => {
+app.post("/api/tts/play", async (req, res) => {
   try {
+    // You already have app.use(express.json({ limit: "1mb" })) earlier, so no need to add per-route parser.
     const text = String(req.body?.text || req.query.text || "").trim();
     if (!text) return res.status(400).json({ ok: false, error: "Missing text" });
     const voice = String(req.body?.voice || req.query.voice || AZURE_TTS_VOICE);
@@ -791,9 +805,6 @@ app.post("/api/tts/play", express.json(), async (req, res) => {
     res.status(500).json({ ok: false, error: e?.message || "play failed" });
   }
 });
-
-
-
 
 // ---------------------------------------------------------------------------
 // Overlays API
