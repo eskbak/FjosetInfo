@@ -679,17 +679,35 @@ function xmlEscape(s: string) {
     .replace(/'/g, "&apos;");
 }
 
-function buildSSML(text: string, voice = AZURE_TTS_VOICE) {
-  const safe = xmlEscape(text);
+function buildRichSSML(text: string, voice: string, opts?: {
+  rate?: string;     // e.g. "-6%"
+  pitch?: string;    // e.g. "-1st"
+  style?: string;    // e.g. "friendly" | "cheerful" | "calm" | "general"
+  styledegree?: number; // 0.01–2.0 (1 = default)
+  volume?: string;   // e.g. "+0dB" | "-2dB"
+}) {
+  const rate = opts?.rate ?? "-6%";
+  const pitch = opts?.pitch ?? "-1st";
+  const style = opts?.style ?? "cheerful";        // softer than "cheerful"
+  const styledegree = opts?.styledegree ?? 0.7;   // dial down expressiveness
+  const volume = opts?.volume ?? "+0dB";
+
+  const safe = text.replace(/[<&>]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[s]!));
+
   return `
-<speak version="1.0" xml:lang="nb-NO" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts">
+<speak version="1.0" xml:lang="nb-NO"
+       xmlns="http://www.w3.org/2001/10/synthesis"
+       xmlns:mstts="https://www.w3.org/2001/mstts">
   <voice name="${voice}">
-    <mstts:express-as style="cheerful">
-      <prosody rate="-2%>${safe}</prosody>
+    <mstts:express-as style="${style}" styledegree="${styledegree}">
+      <prosody rate="${rate}" pitch="${pitch}" volume="${volume}">
+        ${safe}
+      </prosody>
     </mstts:express-as>
   </voice>
 </speak>`.trim();
 }
+
 
 async function issueToken(): Promise<string> {
   const url = `https://${AZURE_TTS_REGION}.api.cognitive.microsoft.com/sts/v1.0/issueToken`;
@@ -700,7 +718,7 @@ async function issueToken(): Promise<string> {
 
 async function synthesize(text: string, voice = AZURE_TTS_VOICE): Promise<Buffer> {
   if (!AZURE_TTS_REGION || !AZURE_TTS_KEY) throw new Error("Azure TTS not configured");
-  const ssml = buildSSML(text, voice);
+  const ssml = buildRichSSML(text, voice);
   const url = `https://${AZURE_TTS_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
 
   // Try with key
