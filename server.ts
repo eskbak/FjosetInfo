@@ -7,6 +7,9 @@ import fs from "fs";
 import { exec, execSync } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
+import { execFile } from "child_process";
+import { mkdtemp, writeFile } from "fs/promises";
+import os from "os";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -649,6 +652,38 @@ app.get("/api/presence/debug", (_req, res) => {
     })),
     now: new Date().toISOString(),
   });
+});
+
+
+function speakNorwegian(text: string): Promise<void> {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const dir = await mkdtemp(path.join(os.tmpdir(), "tts-"));
+      const wav = path.join(dir, "say.wav");
+      // espeak-ng will render to a wav file; adjust voice/speed as you like
+      const esArgs = ["-v", "nb+male3", "-s", "150", "-w", wav, text];
+      execFile("espeak-ng", esArgs, (err) => {
+        if (err) return reject(err);
+        execFile("pw-play", [wav], (err2) => {
+          if (err2) return reject(err2);
+          resolve();
+        });
+      });
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+app.post("/api/announce", express.json(), async (req, res) => {
+  try {
+    const text = String(req.body?.text || "").trim();
+    if (!text) return res.status(400).json({ error: "Missing text" });
+    await speakNorwegian(text);
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "announce failed" });
+  }
 });
 
 // ---------------------------------------------------------------------------
