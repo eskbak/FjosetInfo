@@ -717,45 +717,87 @@ async function issueToken(): Promise<string> {
   return r.text();
 }
 
+function buildBasicSSML(text: string, voice: string) {
+  const safe = text.replace(/[<&>]/g, (m) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[m]!));
+  return `
+<speak version="1.0" xml:lang="nb-NO" xmlns="http://www.w3.org/2001/10/synthesis">
+  <voice name="${voice}">${safe}</voice>
+</speak>`.trim();
+}
+
 async function synthesize(text: string, voice = AZURE_TTS_VOICE): Promise<Buffer> {
   if (!AZURE_TTS_REGION || !AZURE_TTS_KEY) throw new Error("Azure TTS not configured");
-
-  const ssml = buildSSML(text, voice);
   const url = `https://${AZURE_TTS_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`;
 
-  // Try with key first
-  let r = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/ssml+xml",
-      "X-Microsoft-OutputFormat": AZURE_TTS_FORMAT,
-      "Ocp-Apim-Subscription-Key": AZURE_TTS_KEY,
-    },
-    body: ssml,
-  });
+  // Formats to try (some regions/voices dislike certain MP3 variants)
+  const formats = [
+    AZURE_TTS_FORMAT,                      // your env, e.g. "audio-24khz-48kbitrate-mono-mp3"
+    "audio-24khz-48kbitrate-mono-mp3",
+    "audio-16khz-32kbitrate-mono-mp3",
+  ].filter((v, i, a) => !!v && a.indexOf(v) === i);
 
-  // Fallback to bearer token on 401
-  if (r.status === 401) {
-    const token = await issueToken();
-    r = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/ssml+xml",
-        "X-Microsoft-OutputFormat": AZURE_TTS_FORMAT,
-        Authorization: `Bearer ${token}`,
-      },
-      body: ssml,
-    });
+  // Build bodies up front
+  const ssmlRich   = buildSSML(text, voice);        // your prosody-capable builder
+  const ssmlBasic  = buildBasicSSML(text, voice);   // plain SSML (no mstts/prosody)
+  const plainText  = text;                           // text/plain + Synthesis-VoiceName
+
+  let lastErr: Error | null = null;
+
+  for (const fmt of formats) {
+    // Try with key first; on 401, retry with bearer token inside each attempt.
+    const attempts: Array<{
+      type: string;
+      headers: Record<string, string>;
+      body: string;
+      usePlain?: boolean;
+    }> = [
+      { type: `ssml-rich/${fmt}`,  headers: { "Content-Type": "application/ssml+xml", "X-Microsoft-OutputFormat": fmt }, body: ssmlRich },
+      { type: `ssml-basic/${fmt}`, headers: { "Content-Type": "application/ssml+xml", "X-Microsoft-OutputFormat": fmt }, body: ssmlBasic },
+      // Plain text mode (no SSML). Azure accepts this with Synthesis-VoiceName header.
+      { type: `plain/${fmt}`,      headers: { "Content-Type": "text/plain", "X-Microsoft-OutputFormat": fmt, "Synthesis-VoiceName": voice }, body: plainText, usePlain: true },
+    ];
+
+    for (const step of attempts) {
+      try {
+        // Try with subscription key
+        let r = await fetch(url, {
+          method: "POST",
+          headers: { ...step.headers, "Ocp-Apim-Subscription-Key": AZURE_TTS_KEY },
+          body: step.body,
+        });
+
+        // Retry with bearer token if needed
+        if (r.status === 401) {
+          const token = await issueToken();
+          r = await fetch(url, {
+            method: "POST",
+            headers: { ...step.headers, Authorization: `Bearer ${token}` },
+            body: step.body,
+          });
+        }
+
+        if (r.ok) {
+          const ab = await r.arrayBuffer();
+          return Buffer.from(ab);
+        }
+
+        const txt = await r.text().catch(() => "");
+        // Keep trying other shapes on common client errors
+        if (r.status === 400 || r.status === 415 || r.status === 422) {
+          lastErr = new Error(`Azure TTS ${r.status} on ${step.type}: ${txt}`);
+          continue;
+        }
+        // For other statuses (403/404/5xx), remember and keep trying next attempt/format
+        lastErr = new Error(`Azure TTS ${r.status} on ${step.type}: ${txt}`);
+      } catch (e: any) {
+        lastErr = new Error(`Azure TTS error on ${step.type}: ${e?.message || e}`);
+      }
+    }
   }
 
-  if (!r.ok) {
-    const t = await r.text().catch(() => "");
-    throw new Error(`Azure TTS ${r.status}: ${t}`);
-  }
-
-  const ab = await r.arrayBuffer();
-  return Buffer.from(ab);
+  throw lastErr || new Error("Azure TTS failed");
 }
+
 
 function cacheKey(text: string, voice: string) {
   return crypto.createHash("sha1").update(`${voice}\n${text}`).digest("hex") + ".mp3";
