@@ -15,7 +15,7 @@ const AVATARS: Record<string, string> = {
   Eskil: eskilPng,
   Sindre: sindrePng,
   Hallgrim: eskilPng,
-  Kristian: kristianPng,
+  Skurken: kristianPng,
   Niklas: eskilPng,
   Marius: eskilPng,
 };
@@ -47,7 +47,7 @@ export default function PresenceDock({
         if (!alive) return;
         const list = Array.isArray(j.present) ? (j.present as string[]) : [];
         // Household order keeps positions stable
-        const ORDER = ["Hallgrim", "Eskil", "Sindre", "Kristian", "Niklas", "Marius"];
+        const ORDER = ["Hallgrim", "Eskil", "Sindre", "Skurken", "Niklas", "Marius"];
         list.sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
         setPresent(list);
       } catch {

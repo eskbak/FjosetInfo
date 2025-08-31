@@ -13,7 +13,7 @@ const AVATARS: Record<string, string> = {
   Eskil: eskilPng,
   Sindre: sindrePng,
   Hallgrim: fallbackPng,
-  Kristian: kristianPng,
+  Skurken: kristianPng,
   Niklas: fallbackPng,
   Marius: fallbackPng,
 };
