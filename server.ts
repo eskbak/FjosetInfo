@@ -821,6 +821,41 @@ app.get("/api/announce/azure", async (req, res) => {
   }
 });
 
+import crypto from "crypto";
+
+// helper that fetches an MP3 from your existing simple endpoint
+async function fetchTTSMp3(name: string): Promise<Buffer> {
+  const url = `http://localhost:${PORT}/api/announce/azure/simple?name=${encodeURIComponent(name)}&ts=${Date.now()}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`TTS fetch failed ${r.status}`);
+  const ab = await r.arrayBuffer();
+  return Buffer.from(ab);
+}
+
+app.post("/api/announce/azure/play", async (req, res) => {
+  try {
+    const name = String(req.query.name || req.body?.name || "").trim();
+    if (!name) return res.status(400).json({ ok:false, error:"Missing name" });
+
+    const buf = await fetchTTSMp3(name);
+    const tmp = path.join(os.tmpdir(), `tts-${crypto.randomBytes(4).toString("hex")}.mp3`);
+    fs.writeFileSync(tmp, buf);
+
+    execFile("mpg123", ["-q", tmp], (err) => {
+      fs.unlink(tmp, () => {});
+      if (err) {
+        console.error("mpg123 failed:", err);
+        return;
+      }
+    });
+
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ ok:false, error: e?.message || "announce failed" });
+  }
+});
+
+
 
 // ---------------------------------------------------------------------------
 // Overlays API

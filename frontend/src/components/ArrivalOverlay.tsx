@@ -6,9 +6,9 @@ type Props = {
   onClose: () => void;
   /** How long the overlay stays fully visible before closing (ms). */
   durationMs?: number;
-  /** Speak via Azure when the overlay opens. */
+  /** Ask the server to speak when the overlay opens. */
   speakOnMount?: boolean;
-  /** 0.0 – 1.0 */
+  /** Unused with server-side audio (volume handled on the Pi). */
   volume?: number;
 };
 
@@ -17,7 +17,6 @@ export default function ArrivalOverlay({
   onClose,
   durationMs = 9000,
   speakOnMount = true,
-  volume = 1.0,
 }: Props) {
   const [closing, setClosing] = useState(false);
 
@@ -26,110 +25,43 @@ export default function ArrivalOverlay({
   const mainTimerRef = useRef<number | null>(null);
   const watchdogRef = useRef<number | null>(null);
 
-  // audio refs
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const objectUrlRef = useRef<string | null>(null);
-
   const close = () => {
     if (closedRef.current) return;
     closedRef.current = true;
     setClosing(true);
-
-    // fade out quickly, then call onClose
+    // allow fade-out
     window.setTimeout(() => {
-      try {
-        onClose();
-      } catch {}
+      try { onClose(); } catch {}
     }, 450);
   };
 
-  // --- Azure TTS playback when shown ---
+  // 🔊 Tell the server to speak (no browser audio/autoplay issues)
   useEffect(() => {
-    let aborted = false;
+    if (!speakOnMount) return;
 
-    async function startTts() {
-      if (!speakOnMount) return;
+    // fire-and-forget; server will queue/play via mpg123
+    fetch("/api/announce/azure/play", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+      keepalive: true, // harmless here; ensures request isn't dropped on quick navigations
+    }).catch(() => {
+      // ignore; overlay still shows even if TTS fails
+    });
+  }, [name, speakOnMount]);
 
-      // build a cache-busting URL so we always get a fresh audio
-      const ttsUrl = `/api/announce/azure/simple?name=${encodeURIComponent(name)}&ts=${Date.now()}`;
-
-      // Strategy A (fastest): stream directly by assigning the URL to an <audio> element.
-      // This avoids extra memory copies on the Pi.
-      try {
-        const a = new Audio();
-        audioRef.current = a;
-        a.volume = Math.min(1, Math.max(0, volume));
-        a.preload = "auto";
-        a.src = ttsUrl;
-
-        // Attempt play; autoplay may be allowed in kiosk mode. If it's blocked, we silently skip speech.
-        await a.play().catch(() => {});
-        // If component is already closing or unmounted, stop.
-        if (aborted || closedRef.current) {
-          try { a.pause(); } catch {}
-        }
-        return;
-      } catch {
-        /* fall through to Strategy B */
-      }
-
-      // Strategy B: fetch -> blob -> objectURL (slower / more RAM, but works if direct stream fails)
-      try {
-        const r = await fetch(ttsUrl, { cache: "no-store" });
-        if (!r.ok) throw new Error(`Azure TTS ${r.status}`);
-        const blob = await r.blob();
-        const url = URL.createObjectURL(blob);
-        objectUrlRef.current = url;
-
-        const a = new Audio(url);
-        audioRef.current = a;
-        a.volume = Math.min(1, Math.max(0, volume));
-        await a.play().catch(() => {});
-        if (aborted || closedRef.current) {
-          try { a.pause(); } catch {}
-        }
-      } catch {
-        // Last-resort: no speech; just show overlay
-      }
-    }
-
-    startTts();
-
-    return () => {
-      aborted = true;
-      // cleanup any audio on unmount
-      const a = audioRef.current;
-      if (a) {
-        try { a.pause(); } catch {}
-        try { a.src = ""; } catch {}
-      }
-      if (objectUrlRef.current) {
-        URL.revokeObjectURL(objectUrlRef.current);
-        objectUrlRef.current = null;
-      }
-      audioRef.current = null;
-    };
-  }, [name, speakOnMount, volume]);
-
-  // --- timers for auto-close + watchdog + Esc key ---
+  // Auto-close + watchdog + Esc to dismiss
   useEffect(() => {
-    // main auto-close
     mainTimerRef.current = window.setTimeout(close, durationMs) as unknown as number;
-
-    // watchdog (belt-and-braces in case of any animation stall)
     watchdogRef.current = window.setTimeout(close, durationMs + 4000) as unknown as number;
 
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
     window.addEventListener("keydown", onKey);
-
     return () => {
       window.removeEventListener("keydown", onKey);
       if (mainTimerRef.current) window.clearTimeout(mainTimerRef.current);
       if (watchdogRef.current) window.clearTimeout(watchdogRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [durationMs]);
 
   return (
@@ -160,7 +92,6 @@ export default function ArrivalOverlay({
 }
       `}</style>
 
-      {/* Center card */}
       <div
         style={{
           background: "rgba(255,255,255,0.10)",
