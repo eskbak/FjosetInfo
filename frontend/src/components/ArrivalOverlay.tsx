@@ -86,7 +86,7 @@ export default function ArrivalOverlay({
       }
     };
 
-    say(`Velkommen hjem, ${name}!`);
+    say(`${name} er hjemme!`);
 
     return () => controller.abort();
   }, [name, speak, announceEndpoint]);
