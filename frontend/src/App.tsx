@@ -4,16 +4,12 @@ import BirthdayNotification from "./components/BirthdayNotification";
 import DashboardView from "./views/DashboardView";
 import NewsView from "./views/NewsView";
 import CalendarView from "./views/CalendarView";
-import AdminView from "./views/AdminView";
 import GlobalOverlays from "./components/GlobalOverlays";
 import ArrivalOverlay from "./components/ArrivalOverlay";
 import PresenceDock from "./components/PresenceDock";
 import type { Theme, Colors } from "./types";
-import { useSettings } from "./state/SettingsContext";
 
 export default function App() {
-  const { settings } = useSettings();
-
   // --- Arrival overlay state ---
   const [arrivalName, setArrivalName] = useState<string | null>(null);
 
@@ -31,12 +27,9 @@ export default function App() {
   const lastAnnouncedAtRef = useRef<Map<string, number>>(new Map());
   const ANNOUNCE_COOLDOWN_MS = 5 * 60 * 1000;
 
-  // ---- theme / day-night based on settings.dayHours ----
+  // ---- theme / day-night based on hardcoded dayHours ----
   const localHour = new Date().getHours();
-  const isDay =
-    settings.dayHours.start <= settings.dayHours.end
-      ? localHour >= settings.dayHours.start && localHour < settings.dayHours.end
-      : localHour >= settings.dayHours.start || localHour < settings.dayHours.end; // handles overnight windows
+  const isDay = localHour >= 6 && localHour < 18;
 
   const theme: Theme = isDay
     ? { bg: "#f6f7f9", text: "#0b1220", card: "#ffffff", border: "#e5e7eb" }
@@ -72,14 +65,10 @@ export default function App() {
   }, []);
 
   // ---- rotation + prefetch (no hidden mounting) ----
-  type ViewKey = "dashboard" | "news" | "calendar" | "admin";
-  const ORDER: ViewKey[] = ([
-    settings.viewsEnabled.dashboard && "dashboard",
-    settings.viewsEnabled.news && "news",
-    settings.viewsEnabled.calendar && "calendar",
-  ].filter(Boolean) as ViewKey[]);
+  type ViewKey = "dashboard" | "news" | "calendar";
+  const ORDER: ViewKey[] = ["dashboard", "news", "calendar"];
 
-  const ROTATE_MS = Math.max(5, settings.rotateSeconds) * 1000;
+  const ROTATE_MS = Math.max(5, 45) * 1000;
   const PRELOAD_MS = 5_000; // start warming right before switch
 
   const [view, setView] = useState<ViewKey>(ORDER[0] ?? "dashboard");
@@ -91,10 +80,10 @@ export default function App() {
         if (name === "news") {
           await fetch("/api/nrk/latest"); // server should set Cache-Control
         } else if (name === "calendar") {
-          // warm N-day window per settings
+          // warm N-day window per hardcoded daysAhead
           const start = new Date(); start.setHours(0, 0, 0, 0);
           const end = new Date(start);
-          end.setDate(end.getDate() + Math.max(0, settings.calendarDaysAhead));
+          end.setDate(end.getDate() + Math.max(0, 4));
           end.setHours(23, 59, 59, 999);
           const qs = new URLSearchParams({ timeMin: start.toISOString(), timeMax: end.toISOString() });
           await fetch(`/api/calendar/upcoming?${qs.toString()}`);
@@ -107,10 +96,10 @@ export default function App() {
         // ignore prefetch errors – real render will retry
       }
     };
-  }, [settings.calendarDaysAhead]);
+  }, []);
 
   useEffect(() => {
-    // if all views toggled off, don't rotate; keep whatever view is set (e.g., admin)
+    // if all views toggled off, don't rotate; keep whatever view is set
     if (ORDER.length === 0) return;
 
     let rotateId: number;
@@ -131,8 +120,7 @@ export default function App() {
 
     preloadId = window.setTimeout(doPrefetch, Math.max(0, ROTATE_MS - PRELOAD_MS));
     rotateId = window.setTimeout(() => {
-      // if we navigated to admin manually, don't force-rotate
-      if (view !== "admin") setView(nextView);
+      setView(nextView);
     }, ROTATE_MS);
 
     return () => {
@@ -240,9 +228,6 @@ const tick = async () => {
         />
       )}
 
-      {/* Admin (not part of auto-rotation) */}
-      {view === "admin" && <AdminView />}
-
       {/* Arrival overlay (full-screen) */}
       {arrivalName && <ArrivalOverlay name={arrivalName} onClose={handleArrivalClosed} />}
 
@@ -295,19 +280,6 @@ const tick = async () => {
           }}
         >
           Calendar
-        </button>
-        <button
-          onClick={() => setView("admin")}
-          style={{
-            padding: "6px 10px",
-            borderRadius: 10,
-            border: `1px solid ${theme.border}`,
-            background: theme.card,
-            color: theme.text,
-            cursor: "pointer",
-          }}
-        >
-          Admin
         </button>
         <button
           onClick={() => {
