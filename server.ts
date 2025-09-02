@@ -934,6 +934,59 @@ app.get("/api/birthdays/today", (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Admin API
+// ---------------------------------------------------------------------------
+app.post("/api/admin/auth", (req, res) => {
+  try {
+    const { password } = req.body;
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    
+    if (!adminPassword) {
+      return res.status(503).json({ ok: false, error: "Admin password not configured" });
+    }
+    
+    if (password === adminPassword) {
+      res.json({ ok: true });
+    } else {
+      res.status(401).json({ ok: false, error: "Invalid password" });
+    }
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e?.message || "Authentication error" });
+  }
+});
+
+// Get all birthdays for admin management
+app.get("/api/admin/birthdays", (_req, res) => {
+  try {
+    const birthdayListEnv = process.env.BIRTHDAY_LIST || "[]";
+    let birthdayList: Array<{ name: string; date: string }> = [];
+    
+    try {
+      birthdayList = JSON.parse(birthdayListEnv);
+    } catch (e) {
+      console.error("Failed to parse BIRTHDAY_LIST:", e);
+      return res.status(500).json({ error: "Invalid birthday list format" });
+    }
+
+    if (!Array.isArray(birthdayList)) {
+      return res.status(500).json({ error: "Birthday list must be an array" });
+    }
+
+    res.json({ birthdays: birthdayList });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Birthday service error" });
+  }
+});
+
+// Note: For now, birthday updates require manual .env file changes
+// This endpoint provides the current list for display only
+app.post("/api/admin/birthdays", (_req, res) => {
+  res.status(501).json({ 
+    error: "Birthday updates require manual .env file changes. Update BIRTHDAY_LIST environment variable." 
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Overlays API
 // ---------------------------------------------------------------------------
 app.get("/api/overlays", (_req, res) => {

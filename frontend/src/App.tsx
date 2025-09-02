@@ -6,9 +6,34 @@ import NewsView from "./views/NewsView";
 import CalendarView from "./views/CalendarView";
 import ArrivalOverlay from "./components/ArrivalOverlay";
 import PresenceDock from "./components/PresenceDock";
+import AdminPage from "./components/AdminPage";
 import type { Theme, Colors } from "./types";
 
 export default function App() {
+  // Simple hash-based routing
+  const [currentRoute, setCurrentRoute] = useState(() => {
+    return window.location.hash.slice(1) || "";
+  });
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      setCurrentRoute(window.location.hash.slice(1) || "");
+    };
+    
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  // If we're on admin route, render admin page
+  if (currentRoute === "admin") {
+    return <AdminPage />;
+  }
+
+  // Main app component
+  return <MainApp />;
+}
+
+function MainApp() {
   // --- Arrival overlay state ---
   const [arrivalName, setArrivalName] = useState<string | null>(null);
 
