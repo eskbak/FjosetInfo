@@ -9,15 +9,18 @@ import kristianPng from "../assets/avatars/kristian.png?url";
 import niklasPng from "../assets/avatars/niklas.png?url";
 // import mariusPng from "../assets/avatars/marius.png?url";
 import fallbackPng from "../assets/avatars/fallback.png?url";
+import hallgrimPng from "../assets/avatars/hallgrim.png?url";
+import minaPng from "../assets/avatars/mina.png?url";
 
 // Map KNOWN_DEVICES "name" -> image
 const AVATARS: Record<string, string> = {
   Eskil: eskilPng,
   Sindre: sindrePng,
-  Hallgrim: eskilPng,
+  Hallgrim: hallgrimPng,
   Skurken: kristianPng,
   Niklas: niklasPng,
   Marius: eskilPng,
+  Mina: minaPng
 };
 
 type Props = {

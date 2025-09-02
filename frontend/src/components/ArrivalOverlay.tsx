@@ -7,16 +7,19 @@ import sindrePng from "../assets/avatars/sindre.png?url";
 import kristianPng from "../assets/avatars/kristian.png?url";
 import fallbackPng from "../assets/avatars/fallback.png?url";
 import niklasPng from "../assets/avatars/niklas.png?url";
+import hallgrimPng from "../assets/avatars/hallgrim.png?url";
+import minaPng from "../assets/avatars/mina.png?url";
 
 // Map of KNOWN_DEVICES name -> avatar image.
 // Update these as you add files (e.g., sindre.png, hallgrim.png, etc.)
 const AVATARS: Record<string, string> = {
   Eskil: eskilPng,
   Sindre: sindrePng,
-  Hallgrim: fallbackPng,
+  Hallgrim: hallgrimPng,
   Skurken: kristianPng,
   Niklas: niklasPng,
   Marius: fallbackPng,
+  Mina: minaPng
 };
 
 // at top of the component file
