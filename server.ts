@@ -1364,6 +1364,55 @@ app.put("/api/settings", (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Health check endpoint for Pi deployment debugging
+// ---------------------------------------------------------------------------
+app.get("/api/health", (_req, res) => {
+  const os = require('os');
+  const health = {
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    server: {
+      platform: os.platform(),
+      arch: os.arch(),
+      nodeVersion: process.version,
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+    },
+    files: {
+      settings: fs.existsSync(SETTINGS_FILE),
+      birthdays: fs.existsSync(BIRTHDAYS_FILE),
+      knownDevices: fs.existsSync(KNOWN_DEVICES_FILE),
+      notifications: fs.existsSync(NOTIFICATIONS_FILE),
+      overlays: fs.existsSync(OVERLAYS_FILE),
+      avatarsDir: fs.existsSync(path.join(__dirname, "avatars")),
+    },
+    network: {
+      interfaces: (() => {
+        const interfaces = os.networkInterfaces();
+        const result: Record<string, string[]> = {};
+        for (const [name, addrs] of Object.entries(interfaces)) {
+          if (addrs) {
+            result[name] = addrs
+              .filter(addr => addr.family === 'IPv4')
+              .map(addr => addr.address);
+          }
+        }
+        return result;
+      })(),
+    },
+    config: {
+      port: PORT,
+      host: HOST,
+      adminPasswordConfigured: !!process.env.ADMIN_PASSWORD,
+      presenceMode: PRESENCE_MODE,
+      knownDevicesCount: KNOWN_DEVICES.length,
+    }
+  };
+  
+  res.json(health);
+});
+
+// ---------------------------------------------------------------------------
 // OAuth helper (mint a refresh_token once)
 // ---------------------------------------------------------------------------
 const OAUTH_REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI || `http://localhost:${PORT}/oauth2callback`;
