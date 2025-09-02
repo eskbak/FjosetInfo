@@ -49,14 +49,6 @@ if [ ! -f "notifications.json" ]; then
     echo "📢 Creating empty notifications.json..."
     echo "[]" > notifications.json
 fi
-
-# Initialize overlays.json if it doesn't exist
-if [ ! -f "overlays.json" ]; then
-    echo "📋 Creating empty overlays.json..."
-    cat > overlays.json << 'EOF'
-{
-  "overlays": []
-}
 EOF
 fi
 
@@ -117,30 +109,15 @@ if [ "$NODE_MAJOR" -lt 18 ]; then
     echo "⚠️  Warning: Node.js version $NODE_VERSION detected. Version 18+ recommended."
 fi
 
-# Install dependencies if package.json exists
-if [ -f "package.json" ]; then
-    echo "📦 Installing dependencies..."
-    npm install
-fi
-
-# Build frontend if it exists
-if [ -d "frontend" ]; then
-    echo "🏗️ Building frontend..."
-    cd frontend
-    npm install
-    npm run build
-    cd ..
-fi
-
 echo ""
 echo "✅ Setup complete!"
 echo ""
 echo "📋 Next steps:"
 echo "1. Edit .env file and set your ADMIN_PASSWORD"
 echo "2. Configure any optional settings in .env"
-echo "3. Run: npm run dev (for development) or npm start (for production)"
-echo "4. Access the app at: http://your-pi-ip:8787"
-echo "5. Access admin panel at: http://your-pi-ip:8787/#admin"
+echo "3. !!!This runs at boot!!! Run: npm run dev (for development) or npm start (for production) !!!This runs at boot!!!"
+echo "4. Access the app at: http://your-pi-ip:5137"
+echo "5. Access admin panel at: http://your-pi-ip:5137/#admin"
 echo ""
 echo "🔍 To find your Pi's IP address: hostname -I"
 echo ""
