@@ -59,33 +59,40 @@ export default function BirthdayNotification({ theme }: BirthdayNotificationProp
       style={{
         background: `linear-gradient(135deg, #ff6b6b, #ffd93d)`,
         color: "#333",
-        padding: "12px 20px",
-        borderRadius: "8px",
+        padding: "20px",
+        borderRadius: "12px",
         margin: "0 20px 20px 20px",
         display: "flex",
         alignItems: "center",
-        justifyContent: "space-between",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        fontSize: "1.1em",
-        fontWeight: "500",
+        justifyContent: "center",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        fontSize: "2.2em",
+        fontWeight: "600",
+        textAlign: "center",
+        position: "relative",
+        minHeight: "80px",
       }}
     >
-      <span>{birthdayText}</span>
+      <span style={{ flex: 1 }}>{birthdayText}</span>
       <button
         onClick={handleDismiss}
         style={{
-          background: "rgba(255,255,255,0.3)",
+          background: "rgba(255,255,255,0.4)",
           border: "none",
           borderRadius: "50%",
-          width: "24px",
-          height: "24px",
+          width: "32px",
+          height: "32px",
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          fontSize: "14px",
+          fontSize: "18px",
           color: "#333",
-          marginLeft: "12px",
+          position: "absolute",
+          right: "16px",
+          top: "50%",
+          transform: "translateY(-50%)",
+          fontWeight: "bold",
         }}
         title="Skjul for i dag"
       >
