@@ -47,6 +47,10 @@ export default function AtBCard({ theme, isDay, stopPlaceId, maxRows = 5 }: Prop
     padding: 20,
     border: `1px solid ${theme.border}`,
     boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    minHeight: 0, // Allow shrinking
+    overflow: "hidden", // Prevent overflow
   };
 
   return (
@@ -58,23 +62,24 @@ export default function AtBCard({ theme, isDay, stopPlaceId, maxRows = 5 }: Prop
           Ta beina fatt!
         </div>
       ) : (
-        <>
-          <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-            <colgroup>
-              <col style={{ width: "40%" }} />
-              <col style={{ width: "30%" }} />
-              <col style={{ width: "30%" }} />
-            </colgroup>
-            <thead>
-              <tr style={{ textAlign: "left", opacity: 0.65, fontSize: "1.8em" }}>
-                <th style={{ padding: "0.35em 0.3em", paddingLeft: 30 }}>Destinasjon</th>
-                <th style={{ padding: "0.35em 0.3em" }}>Avgang</th>
-                <th style={{ padding: "0.35em 0.3em", textAlign: "right", paddingRight: 60 }}>Om</th>
-              </tr>
-            </thead>
-            <tbody>
-              {departures.map((d: any, i: number) => (
-                <tr key={i} style={{ borderTop: i > 0 ? `1px solid ${theme.border}` : "none" }}>
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+              <colgroup>
+                <col style={{ width: "40%" }} />
+                <col style={{ width: "30%" }} />
+                <col style={{ width: "30%" }} />
+              </colgroup>
+              <thead>
+                <tr style={{ textAlign: "left", opacity: 0.65, fontSize: "1.8em" }}>
+                  <th style={{ padding: "0.35em 0.3em", paddingLeft: 30 }}>Destinasjon</th>
+                  <th style={{ padding: "0.35em 0.3em" }}>Avgang</th>
+                  <th style={{ padding: "0.35em 0.3em", textAlign: "right", paddingRight: 60 }}>Om</th>
+                </tr>
+              </thead>
+              <tbody>
+                {departures.map((d: any, i: number) => (
+                  <tr key={i} style={{ borderTop: i > 0 ? `1px solid ${theme.border}` : "none" }}>
 <td
   style={{
     padding: "0.4em 0.3em",
@@ -90,19 +95,20 @@ export default function AtBCard({ theme, isDay, stopPlaceId, maxRows = 5 }: Prop
   {d.destination}
 </td>
 
-                  <td style={{ padding: "0.4em 0.3em", fontSize: "3.5em", fontVariantNumeric: "tabular-nums", fontWeight: 400 }}>
-                    {d.expected ? format(parseISO(d.expected), "HH:mm") : "—"}
-                  </td>
-                  <td style={{ padding: "0.4em 0.3em", fontSize: "3.5em", textAlign: "right", fontWeight: 400, paddingRight: 60 }}>
-                    {d.inMin !== null ? `${d.inMin} min` : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
+                    <td style={{ padding: "0.4em 0.3em", fontSize: "3.5em", fontVariantNumeric: "tabular-nums", fontWeight: 400 }}>
+                      {d.expected ? format(parseISO(d.expected), "HH:mm") : "—"}
+                    </td>
+                    <td style={{ padding: "0.4em 0.3em", fontSize: "3.5em", textAlign: "right", fontWeight: 400, paddingRight: 60 }}>
+                      {d.inMin !== null ? `${d.inMin} min` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <PoweredBy logo={isDay ? enturLogoLight : enturLogoDark} alt="Entur logo" />
+        </div>
       )}
-                <PoweredBy logo={isDay ? enturLogoLight : enturLogoDark} alt="Entur logo" />
     </section>
   );
 }

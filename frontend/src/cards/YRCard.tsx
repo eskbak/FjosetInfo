@@ -169,6 +169,10 @@ export default function YRCard({ theme, isDay, lat, lon, hours = 5 }: Props) {
     padding: 20,
     border: `1px solid ${theme.border}`,
     boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    minHeight: 0, // Allow shrinking
+    overflow: "hidden", // Prevent overflow
   };
 
   return (
@@ -176,8 +180,8 @@ export default function YRCard({ theme, isDay, lat, lon, hours = 5 }: Props) {
       {!yr ? (
         <div style={{ opacity: 0.7, fontSize: "3.6em" }}>Laster været…</div>
       ) : (
-        <>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+          <div style={{ flex: 1, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
               <colgroup>
                 <col style={{ width: "18%" }} />
@@ -264,7 +268,7 @@ export default function YRCard({ theme, isDay, lat, lon, hours = 5 }: Props) {
           </div>
 
           <PoweredBy logo={isDay ? yrLogoLight : yrLogoDark} alt="YR logo" />
-        </>
+        </div>
       )}
     </section>
   );
