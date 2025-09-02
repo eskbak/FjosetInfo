@@ -40,7 +40,7 @@ export default function AtBCard({ theme, isDay, stopPlaceId, maxRows = 5 }: Prop
   }, [entur, maxRows]);
 
   const cardStyle: React.CSSProperties = {
-    flex: "0 0 auto",
+    flex: "1 1 50%", // Equal flex growth and minimum 50% height
     width: "100%",
     background: theme.card,
     borderRadius: 20,
@@ -49,7 +49,7 @@ export default function AtBCard({ theme, isDay, stopPlaceId, maxRows = 5 }: Prop
     boxSizing: "border-box",
     display: "flex",
     flexDirection: "column",
-    minHeight: 0, // Allow shrinking
+    minHeight: 0, // Allow shrinking but maintain flex ratio
     overflow: "hidden", // Prevent overflow
   };
 
