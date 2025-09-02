@@ -39,24 +39,6 @@ function MainApp() {
   // Load settings from JSON file
   const { settings, loading: settingsLoading } = useSettings();
 
-  // Don't render until settings are loaded
-  if (settingsLoading) {
-    return (
-      <div style={{
-        background: "#0b1220",
-        color: "#ffffff",
-        width: "100vw",
-        height: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontFamily: "system-ui, sans-serif",
-      }}>
-        Loading...
-      </div>
-    );
-  }
-
   // --- Arrival overlay state ---
   const [arrivalName, setArrivalName] = useState<string | null>(null);
 
@@ -259,6 +241,24 @@ const tick = async () => {
     }
     lastAnnouncedAtRef.current.set(name, Date.now());
   };
+
+  // Don't render until settings are loaded
+  if (settingsLoading) {
+    return (
+      <div style={{
+        background: "#0b1220",
+        color: "#ffffff",
+        width: "100vw",
+        height: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "system-ui, sans-serif",
+      }}>
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <div style={pageStyle}>
