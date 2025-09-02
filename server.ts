@@ -81,10 +81,20 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(cors());
+
+// Enhanced CORS configuration for Pi deployment
+app.use(cors({
+  origin: true, // Allow all origins for local network access
+  credentials: true,
+}));
+
 app.use(express.json({ limit: "1mb" }));
 
+// Enable trust proxy for proper IP detection
+app.set('trust proxy', true);
+
 const PORT = Number(process.env.PORT || 8787);
+const HOST = process.env.HOST || '0.0.0.0'; // Listen on all interfaces for Pi deployment
 const ET_CLIENT_NAME = process.env.ET_CLIENT_NAME || "pi-infoscreen/0.1 (example@example.com)";
 const MET_USER_AGENT = process.env.MET_USER_AGENT || "pi-infoscreen/0.1 (example@example.com)";
 const NRK_RSS_URL = process.env.NRK_RSS_URL || "https://www.nrk.no/nyheter/siste.rss";
@@ -256,6 +266,7 @@ app.get("/api/entur/departures", async (req: Request, res: Response) => {
         "ET-Client-Name": ET_CLIENT_NAME,
       },
       body: JSON.stringify({ query, variables: { id: stopPlaceId, max } }),
+      signal: AbortSignal.timeout(10000), // 10 second timeout
     });
 
     if (!r.ok) {
@@ -320,7 +331,10 @@ app.get("/api/yr/today", async (req: Request, res: Response) => {
     const hoursWanted = Math.min(Math.max(Number(req.query.hours || 5), 1), 12); // 1..12
 
     const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`;
-    const r = await fetch(url, { headers: { "User-Agent": MET_USER_AGENT } });
+    const r = await fetch(url, { 
+      headers: { "User-Agent": MET_USER_AGENT },
+      signal: AbortSignal.timeout(10000), // 10 second timeout
+    });
     if (!r.ok) {
       const text = await r.text();
       return res.status(r.status).send(text);
@@ -429,6 +443,7 @@ app.get("/api/nrk/latest", async (req: Request, res: Response) => {
     const feedUrl = String(req.query.url || NRK_RSS_URL);
     const r = await fetch(feedUrl, {
       headers: { Accept: "application/rss+xml, application/xml;q=0.9, */*;q=0.8" },
+      signal: AbortSignal.timeout(10000), // 10 second timeout
     });
     if (!r.ok) {
       const text = await r.text();
@@ -1438,8 +1453,59 @@ app.get(/^\/(?!api\/).*/, (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Start server
+// Start server with enhanced Pi deployment support
 // ---------------------------------------------------------------------------
-app.listen(PORT, () => {
-  console.log(`Proxy listening on http://localhost:${PORT}`);
+
+// Ensure all required JSON files exist with defaults
+function initializeJsonFiles() {
+  const files = [
+    { path: SETTINGS_FILE, content: DEFAULT_SETTINGS },
+    { path: BIRTHDAYS_FILE, content: [] },
+    { path: KNOWN_DEVICES_FILE, content: [] },
+    { path: NOTIFICATIONS_FILE, content: [] },
+    { path: OVERLAYS_FILE, content: { overlays: [] } },
+  ];
+
+  for (const file of files) {
+    if (!fs.existsSync(file.path)) {
+      console.log(`🔧 Creating missing file: ${file.path}`);
+      writeJsonAtomic(file.path, file.content);
+    }
+  }
+
+  // Ensure avatars directory exists
+  const avatarDir = path.join(__dirname, "avatars");
+  if (!fs.existsSync(avatarDir)) {
+    console.log(`📁 Creating avatars directory: ${avatarDir}`);
+    fs.mkdirSync(avatarDir, { recursive: true });
+  }
+}
+
+// Initialize files before starting server
+initializeJsonFiles();
+
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 FjosetInfo server running on http://${HOST}:${PORT}`);
+  console.log(`📱 Access from other devices: http://YOUR_PI_IP:${PORT}`);
+  console.log(`⚙️  Admin panel: http://YOUR_PI_IP:${PORT}/#admin`);
+  
+  // Log network interfaces to help with Pi deployment
+  const os = require('os');
+  const interfaces = os.networkInterfaces();
+  const ips = [];
+  
+  for (const [name, addrs] of Object.entries(interfaces)) {
+    if (addrs) {
+      for (const addr of addrs) {
+        if (addr.family === 'IPv4' && !addr.internal) {
+          ips.push(`${name}: ${addr.address}`);
+        }
+      }
+    }
+  }
+  
+  if (ips.length > 0) {
+    console.log(`🌐 Available on network interfaces:`);
+    ips.forEach(ip => console.log(`   ${ip}`));
+  }
 });

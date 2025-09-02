@@ -28,13 +28,34 @@ export function useSettings() {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const response = await fetch('/api/settings');
+        const response = await fetch('/api/settings', {
+          timeout: 5000, // 5 second timeout
+        } as RequestInit);
+        
         if (response.ok) {
           const data = await response.json();
-          setSettings(data);
+          // Validate the data structure
+          if (data && typeof data === 'object') {
+            setSettings({
+              viewsEnabled: {
+                dashboard: data.viewsEnabled?.dashboard ?? DEFAULT_SETTINGS.viewsEnabled.dashboard,
+                news: data.viewsEnabled?.news ?? DEFAULT_SETTINGS.viewsEnabled.news,
+                calendar: data.viewsEnabled?.calendar ?? DEFAULT_SETTINGS.viewsEnabled.calendar,
+              },
+              dayHours: {
+                start: data.dayHours?.start ?? DEFAULT_SETTINGS.dayHours.start,
+                end: data.dayHours?.end ?? DEFAULT_SETTINGS.dayHours.end,
+              },
+              calendarDaysAhead: data.calendarDaysAhead ?? DEFAULT_SETTINGS.calendarDaysAhead,
+              rotateSeconds: data.rotateSeconds ?? DEFAULT_SETTINGS.rotateSeconds,
+            });
+          }
+        } else {
+          console.warn('Settings API returned:', response.status, response.statusText);
         }
       } catch (error) {
-        console.error('Failed to fetch settings:', error);
+        console.warn('Failed to fetch settings, using defaults:', error);
+        // Keep default settings if fetch fails
       } finally {
         setLoading(false);
       }
