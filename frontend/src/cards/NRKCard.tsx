@@ -36,20 +36,28 @@ export default function NRKCard({ theme, isDay, colors, rotateMs = 10000 }: Prop
   // Examples:
   //   fixed height: height: 520
   //   responsive cap: maxHeight: "70vh"
-  const cardStyle: React.CSSProperties = {
-    flex: "1 1 auto", // Allow the card to grow and shrink
-    width: "100%",
-    background: theme.card,
-    borderRadius: 20,
-    padding: 20,
-    border: `1px solid ${theme.border}`,
-    boxSizing: "border-box",
-    minHeight: 0, // Allow shrinking below content size
-    maxHeight: "100%", // Don't exceed parent container
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden", // Prevent content from overflowing the card
-  };
+const cardStyle: React.CSSProperties = {
+  // Prevent parent from stretching us:
+  flex: "0 0 auto",          // don’t grow
+  alignSelf: "start",         // ignore parent stretch (flex/grid)
+  // placeSelf: "start",      // uncomment if parent is CSS Grid
+
+  width: "100%",
+  background: theme.card,
+  borderRadius: 20,
+  padding: 20,
+  border: `1px solid ${theme.border}`,
+  boxSizing: "border-box",
+
+  // Height rules:
+  height: "auto",             // shrink to content
+  maxHeight: "100%",          // cap at parent size
+  overflow: "hidden",         // hide scrollbars/overflow (infoscreen)
+
+  display: "flex",
+  flexDirection: "column",
+  gap: 0,
+};
 
   if (!nrk?.items?.length) {
     return (
@@ -111,7 +119,19 @@ export default function NRKCard({ theme, isDay, colors, rotateMs = 10000 }: Prop
 
         {/* HEADER / TITLE */}
         <div>
-          <div style={{ fontWeight: 600, fontSize: "5.0em", lineHeight: 1.1, opacity: 0.8, textAlign: "center" }}>
+          <div
+  style={{
+    fontWeight: 600,
+    fontSize: "5.0em",
+    lineHeight: 1.1,
+    opacity: 0.8,
+    textAlign: "center",
+    display: "-webkit-box",
+    WebkitLineClamp: 3,       // prevent tall titles
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+  }}
+>
             {it.title}
           </div>
         </div>
@@ -146,32 +166,6 @@ export default function NRKCard({ theme, isDay, colors, rotateMs = 10000 }: Prop
               }}
             />
           )}
-        </div>
-
-        {/* DOTS */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            gap: 8,
-            marginTop: 4,
-            minHeight: 0,
-            flexWrap: "wrap",
-            flexShrink: 0, // Don't shrink the dots section
-          }}
-        >
-          {nrk.items.map((_: any, i: number) => (
-            <span
-              key={i}
-              style={{
-                width: 15,
-                height: 15,
-                borderRadius: 999,
-                background: i === (index % nrk.items.length) ? colors.NRK.primary : theme.border,
-                display: "inline-block",
-              }}
-            />
-          ))}
         </div>
       </article>
 
