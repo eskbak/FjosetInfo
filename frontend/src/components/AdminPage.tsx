@@ -104,8 +104,8 @@ export default function AdminPage() {
         
         // Load notifications (stub - empty for now)
         setNotifications([]);
-      } catch (error) {
-        console.error("Failed to load admin data:", error);
+      } catch {
+        console.error("Failed to load admin data");
       }
     };
     
@@ -143,8 +143,8 @@ export default function AdminPage() {
         setSettings(data);
         setSettingsChanged(false);
       }
-    } catch (error) {
-      console.error("Failed to reload settings:", error);
+    } catch {
+      console.error("Failed to reload settings");
     }
   };
 
