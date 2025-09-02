@@ -49,7 +49,7 @@ export default function AdminPage() {
   
   // Known Devices state
   const [knownDevices, setKnownDevices] = useState<KnownDevice[]>([]);
-  const [newDevice, setNewDevice] = useState({ name: "", macs: "", ips: "" });
+  const [newDevice, setNewDevice] = useState({ name: "", macs: "", ips: "", avatar: null as File | null });
   
   // Notification state
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -226,10 +226,32 @@ export default function AdminPage() {
       return;
     }
     
+    if (!newDevice.avatar) {
+      alert("Please select an avatar image (.png file)");
+      return;
+    }
+    
     const macs = newDevice.macs.split(",").map(m => m.trim()).filter(Boolean);
     const ips = newDevice.ips.split(",").map(ip => ip.trim()).filter(Boolean);
     
     try {
+      // First upload the avatar
+      const formData = new FormData();
+      formData.append('avatar', newDevice.avatar);
+      formData.append('name', newDevice.name.trim());
+      
+      const uploadResponse = await fetch("/api/admin/upload-avatar", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!uploadResponse.ok) {
+        const uploadResult = await uploadResponse.json();
+        alert(uploadResult.error || "Failed to upload avatar");
+        return;
+      }
+      
+      // Then add the device
       const response = await fetch("/api/admin/devices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -243,7 +265,7 @@ export default function AdminPage() {
       const result = await response.json();
       if (result.ok) {
         setKnownDevices(result.devices);
-        setNewDevice({ name: "", macs: "", ips: "" });
+        setNewDevice({ name: "", macs: "", ips: "", avatar: null });
       } else {
         alert(result.error || "Failed to add device");
       }
@@ -818,6 +840,31 @@ export default function AdminPage() {
                       boxSizing: "border-box"
                     }}
                   />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>Avatar Image (.png file required)</label>
+                  <input
+                    type="file"
+                    accept=".png,image/png"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      setNewDevice({ ...newDevice, avatar: file });
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: `1px solid ${theme.border}`,
+                      borderRadius: "4px",
+                      background: theme.bg,
+                      color: theme.text,
+                      boxSizing: "border-box"
+                    }}
+                  />
+                  {newDevice.avatar && (
+                    <div style={{ marginTop: "8px", fontSize: "12px", color: theme.text }}>
+                      Selected: {newDevice.avatar.name}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={addDevice}

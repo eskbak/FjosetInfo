@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Header from "./components/Header";
 import BirthdayNotification from "./components/BirthdayNotification";
+import NotificationDisplay from "./components/NotificationDisplay";
 import DashboardView from "./views/DashboardView";
 import NewsView from "./views/NewsView";
 import CalendarView from "./views/CalendarView";
 import ArrivalOverlay from "./components/ArrivalOverlay";
 import PresenceDock from "./components/PresenceDock";
 import AdminPage from "./components/AdminPage";
+import { useSettings } from "./hooks/useSettings";
 import type { Theme, Colors } from "./types";
 
 export default function App() {
@@ -34,6 +36,27 @@ export default function App() {
 }
 
 function MainApp() {
+  // Load settings from JSON file
+  const { settings, loading: settingsLoading } = useSettings();
+
+  // Don't render until settings are loaded
+  if (settingsLoading) {
+    return (
+      <div style={{
+        background: "#0b1220",
+        color: "#ffffff",
+        width: "100vw",
+        height: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontFamily: "system-ui, sans-serif",
+      }}>
+        Loading...
+      </div>
+    );
+  }
+
   // --- Arrival overlay state ---
   const [arrivalName, setArrivalName] = useState<string | null>(null);
 
@@ -51,9 +74,9 @@ function MainApp() {
   const lastAnnouncedAtRef = useRef<Map<string, number>>(new Map());
   const ANNOUNCE_COOLDOWN_MS = 5 * 60 * 1000;
 
-  // ---- theme / day-night based on hardcoded dayHours ----
+  // ---- theme / day-night based on settings ----
   const localHour = new Date().getHours();
-  const isDay = localHour >= 6 && localHour < 18;
+  const isDay = localHour >= settings.dayHours.start && localHour < settings.dayHours.end;
 
   const theme: Theme = isDay
     ? { bg: "#f6f7f9", text: "#0b1220", card: "#ffffff", border: "#e5e7eb" }
@@ -90,9 +113,17 @@ function MainApp() {
 
   // ---- rotation + prefetch (no hidden mounting) ----
   type ViewKey = "dashboard" | "news" | "calendar";
-  const ORDER: ViewKey[] = ["dashboard", "news", "calendar"];
+  
+  // Build active views from settings
+  const ORDER: ViewKey[] = useMemo(() => {
+    const enabledViews: ViewKey[] = [];
+    if (settings.viewsEnabled.dashboard) enabledViews.push("dashboard");
+    if (settings.viewsEnabled.news) enabledViews.push("news");
+    if (settings.viewsEnabled.calendar) enabledViews.push("calendar");
+    return enabledViews;
+  }, [settings.viewsEnabled]);
 
-  const ROTATE_MS = Math.max(5, 45) * 1000;
+  const ROTATE_MS = Math.max(5, settings.rotateSeconds) * 1000;
   const PRELOAD_MS = 5_000; // start warming right before switch
 
   const [view, setView] = useState<ViewKey>(ORDER[0] ?? "dashboard");
@@ -104,10 +135,10 @@ function MainApp() {
         if (name === "news") {
           await fetch("/api/nrk/latest"); // server should set Cache-Control
         } else if (name === "calendar") {
-          // warm N-day window per hardcoded daysAhead
+          // warm N-day window per settings
           const start = new Date(); start.setHours(0, 0, 0, 0);
           const end = new Date(start);
-          end.setDate(end.getDate() + Math.max(0, 4));
+          end.setDate(end.getDate() + Math.max(0, settings.calendarDaysAhead));
           end.setHours(23, 59, 59, 999);
           const qs = new URLSearchParams({ timeMin: start.toISOString(), timeMax: end.toISOString() });
           await fetch(`/api/calendar/upcoming?${qs.toString()}`);
@@ -120,7 +151,7 @@ function MainApp() {
         // ignore prefetch errors – real render will retry
       }
     };
-  }, []);
+  }, [settings.calendarDaysAhead]);
 
   useEffect(() => {
     // if all views toggled off, don't rotate; keep whatever view is set
@@ -236,6 +267,9 @@ const tick = async () => {
       {/* Birthday notification */}
       <BirthdayNotification theme={theme} />
 
+      {/* Daily notifications */}
+      <NotificationDisplay theme={theme} />
+
       <PresenceDock />
 
       {/* Rotating views */}
@@ -246,6 +280,7 @@ const tick = async () => {
           theme={theme}
           colors={COLORS}
           isDay={isDay}
+          daysAhead={settings.calendarDaysAhead}
         />
       )}
 

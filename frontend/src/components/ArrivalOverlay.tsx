@@ -1,26 +1,9 @@
 // components/ArrivalOverlay.tsx
 import { useEffect, useRef, useState } from "react";
+import { useKnownDevices } from "../hooks/useKnownDevices";
 
-// --- OPTIONAL avatar imports (add yours as you create the files) ---
-import eskilPng from "../assets/avatars/eskil.png?url";
-import sindrePng from "../assets/avatars/sindre.png?url";
-import kristianPng from "../assets/avatars/kristian.png?url";
+// Fallback avatar import
 import fallbackPng from "../assets/avatars/fallback.png?url";
-import niklasPng from "../assets/avatars/niklas.png?url";
-import hallgrimPng from "../assets/avatars/hallgrim.png?url";
-import minaPng from "../assets/avatars/mina.png?url";
-
-// Map of KNOWN_DEVICES name -> avatar image.
-// Update these as you add files (e.g., sindre.png, hallgrim.png, etc.)
-const AVATARS: Record<string, string> = {
-  Eskil: eskilPng,
-  Sindre: sindrePng,
-  Hallgrim: hallgrimPng,
-  Skurken: kristianPng,
-  Niklas: niklasPng,
-  Marius: fallbackPng,
-  Mina: minaPng
-};
 
 // at top of the component file
 const emojiStyle: React.CSSProperties = {
@@ -61,6 +44,7 @@ export default function ArrivalOverlay({
   avatarSrc,
 }: Props) {
   const [closing, setClosing] = useState(false);
+  const { devices } = useKnownDevices();
 
   // timers / guards
   const closedRef = useRef(false);
@@ -107,7 +91,8 @@ useEffect(() => {
     };
   }, [durationMs]);
 
-  const src = avatarSrc || AVATARS[name] || fallbackPng;
+  // Determine avatar source - use provided override, server avatar, or fallback
+  const src = avatarSrc || (devices.some(d => d.name === name) ? `/avatars/${name}.png` : fallbackPng);
 
   return (
     <div

@@ -79,3 +79,6 @@ test-results/
 birthdays.json
 known-devices.json
 notifications.json
+
+# Local avatars folder (admin-managed)
+avatars/

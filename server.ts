@@ -2,6 +2,7 @@
 import "dotenv/config";
 import express, { Request, Response } from "express";
 import cors from "cors";
+import multer from "multer";
 import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
 import fs from "fs";
 import { exec, execSync } from "child_process";
@@ -125,6 +126,35 @@ const KNOWN_DEVICES_FILE = process.env.KNOWN_DEVICES_FILE
 const NOTIFICATIONS_FILE = process.env.NOTIFICATIONS_FILE
   ? path.resolve(process.cwd(), process.env.NOTIFICATIONS_FILE)
   : path.join(__dirname, "notifications.json");
+
+// Multer configuration for avatar uploads
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const avatarDir = path.join(__dirname, "avatars");
+    if (!fs.existsSync(avatarDir)) {
+      fs.mkdirSync(avatarDir, { recursive: true });
+    }
+    cb(null, avatarDir);
+  },
+  filename: (req, file, cb) => {
+    const name = req.body.name || req.query.name || 'unknown';
+    cb(null, `${name}.png`);
+  }
+});
+
+const avatarUpload = multer({
+  storage: avatarStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'image/png' || file.originalname.toLowerCase().endsWith('.png')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PNG files are allowed'));
+    }
+  }
+});
 
 const DEFAULT_SETTINGS = {
   viewsEnabled: { dashboard: true, news: true, calendar: true },
@@ -1081,6 +1111,9 @@ app.post("/api/admin/devices", (req, res) => {
     KNOWN_DEVICES.push(newDevice);
     writeJsonAtomic(KNOWN_DEVICES_FILE, KNOWN_DEVICES);
     
+    // Reload KNOWN_DEVICES to ensure consistency
+    KNOWN_DEVICES = loadKnownDevices();
+    
     res.json({ ok: true, devices: KNOWN_DEVICES });
   } catch (e: any) {
     res.status(500).json({ error: e?.message || "Failed to add device" });
@@ -1104,6 +1137,9 @@ app.delete("/api/admin/devices", (req, res) => {
     }
     
     writeJsonAtomic(KNOWN_DEVICES_FILE, KNOWN_DEVICES);
+    
+    // Reload KNOWN_DEVICES to ensure consistency
+    KNOWN_DEVICES = loadKnownDevices();
     
     res.json({ ok: true, devices: KNOWN_DEVICES });
   } catch (e: any) {
@@ -1204,6 +1240,49 @@ app.get("/api/notifications/date/:date", (req, res) => {
     });
   } catch (e: any) {
     res.status(500).json({ error: e?.message || "Notification service error" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Avatar serving
+// ---------------------------------------------------------------------------
+app.get("/avatars/:filename", (req, res) => {
+  const filename = req.params.filename;
+  const avatarPath = path.join(__dirname, "avatars", filename);
+  
+  // Security check - only allow .png files and no path traversal
+  if (!filename.endsWith('.png') || filename.includes('..') || filename.includes('/')) {
+    return res.status(400).json({ error: "Invalid filename" });
+  }
+  
+  // Check if file exists
+  if (!fs.existsSync(avatarPath)) {
+    return res.status(404).json({ error: "Avatar not found" });
+  }
+  
+  res.setHeader("Cache-Control", "public, max-age=86400"); // Cache for 1 day
+  res.sendFile(avatarPath);
+});
+
+// Upload avatar for device
+app.post("/api/admin/upload-avatar", avatarUpload.single('avatar'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No avatar file provided" });
+    }
+    
+    const name = req.body.name;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: "Device name is required" });
+    }
+    
+    res.json({ 
+      ok: true, 
+      message: "Avatar uploaded successfully",
+      filename: req.file.filename 
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error?.message || "Upload failed" });
   }
 });
 
