@@ -114,6 +114,18 @@ const SETTINGS_FILE = process.env.SETTINGS_FILE
   ? path.resolve(process.cwd(), process.env.SETTINGS_FILE)
   : path.join(__dirname, "settings.json");
 
+const BIRTHDAYS_FILE = process.env.BIRTHDAYS_FILE
+  ? path.resolve(process.cwd(), process.env.BIRTHDAYS_FILE)
+  : path.join(__dirname, "birthdays.json");
+
+const KNOWN_DEVICES_FILE = process.env.KNOWN_DEVICES_FILE
+  ? path.resolve(process.cwd(), process.env.KNOWN_DEVICES_FILE)
+  : path.join(__dirname, "known-devices.json");
+
+const NOTIFICATIONS_FILE = process.env.NOTIFICATIONS_FILE
+  ? path.resolve(process.cwd(), process.env.NOTIFICATIONS_FILE)
+  : path.join(__dirname, "notifications.json");
+
 const DEFAULT_SETTINGS = {
   viewsEnabled: { dashboard: true, news: true, calendar: true },
   dayHours: { start: 6, end: 18 }, // local hours where UI is considered "day"
@@ -158,8 +170,15 @@ function normDevice(d: { name: string; macs?: string[]; ips?: string[] }): Known
   };
 }
 
-// Parse KNOWN_DEVICES from .env as proper JSON
-const KNOWN_DEVICES: KnownDevice[] = (() => {
+// Parse KNOWN_DEVICES from JSON file or .env as fallback
+function loadKnownDevices(): KnownDevice[] {
+  // Try loading from JSON file first
+  const jsonDevices = readJsonSafe<KnownDevice[]>(KNOWN_DEVICES_FILE, []);
+  if (jsonDevices.length > 0) {
+    return jsonDevices.map(normDevice);
+  }
+  
+  // Fallback to environment variable for backward compatibility
   try {
     const raw = process.env.KNOWN_DEVICES || "[]";
     const arr = JSON.parse(raw);
@@ -167,7 +186,9 @@ const KNOWN_DEVICES: KnownDevice[] = (() => {
   } catch {
     return [];
   }
-})();
+}
+
+let KNOWN_DEVICES = loadKnownDevices();
 
 // ---------------------------------------------------------------------------
 // Entur departures (no line filter)
@@ -890,23 +911,31 @@ app.post("/api/tts/play", async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Birthday helpers
+// ---------------------------------------------------------------------------
+function loadBirthdays(): Array<{ name: string; date: string }> {
+  // Try loading from JSON file first
+  const jsonBirthdays = readJsonSafe<Array<{ name: string; date: string }>>(BIRTHDAYS_FILE, []);
+  if (jsonBirthdays.length > 0) {
+    return jsonBirthdays.filter(b => b && typeof b.name === "string" && typeof b.date === "string");
+  }
+  
+  // Fallback to environment variable for backward compatibility
+  try {
+    const birthdayListEnv = process.env.BIRTHDAY_LIST || "[]";
+    const birthdayList = JSON.parse(birthdayListEnv);
+    return Array.isArray(birthdayList) ? birthdayList.filter(b => b && typeof b.name === "string" && typeof b.date === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Birthday API
 // ---------------------------------------------------------------------------
 app.get("/api/birthdays/today", (_req, res) => {
   try {
-    const birthdayListEnv = process.env.BIRTHDAY_LIST || "[]";
-    let birthdayList: Array<{ name: string; date: string }> = [];
-    
-    try {
-      birthdayList = JSON.parse(birthdayListEnv);
-    } catch (e) {
-      console.error("Failed to parse BIRTHDAY_LIST:", e);
-      return res.status(500).json({ error: "Invalid birthday list format" });
-    }
-
-    if (!Array.isArray(birthdayList)) {
-      return res.status(500).json({ error: "Birthday list must be an array" });
-    }
+    const birthdayList = loadBirthdays();
 
     // Get today's date in MM-DD format
     const today = new Date();
@@ -914,12 +943,7 @@ app.get("/api/birthdays/today", (_req, res) => {
 
     // Find birthdays matching today
     const todaysBirthdays = birthdayList
-      .filter(birthday => {
-        if (!birthday || typeof birthday.name !== "string" || typeof birthday.date !== "string") {
-          return false;
-        }
-        return birthday.date === todayMD;
-      })
+      .filter(birthday => birthday.date === todayMD)
       .map(birthday => ({ name: birthday.name.trim() }))
       .filter(birthday => birthday.name.length > 0);
 
@@ -958,32 +982,229 @@ app.post("/api/admin/auth", (req, res) => {
 // Get all birthdays for admin management
 app.get("/api/admin/birthdays", (_req, res) => {
   try {
-    const birthdayListEnv = process.env.BIRTHDAY_LIST || "[]";
-    let birthdayList: Array<{ name: string; date: string }> = [];
-    
-    try {
-      birthdayList = JSON.parse(birthdayListEnv);
-    } catch (e) {
-      console.error("Failed to parse BIRTHDAY_LIST:", e);
-      return res.status(500).json({ error: "Invalid birthday list format" });
-    }
-
-    if (!Array.isArray(birthdayList)) {
-      return res.status(500).json({ error: "Birthday list must be an array" });
-    }
-
+    const birthdayList = loadBirthdays();
     res.json({ birthdays: birthdayList });
   } catch (e: any) {
     res.status(500).json({ error: e?.message || "Birthday service error" });
   }
 });
 
-// Note: For now, birthday updates require manual .env file changes
-// This endpoint provides the current list for display only
-app.post("/api/admin/birthdays", (_req, res) => {
-  res.status(501).json({ 
-    error: "Birthday updates require manual .env file changes. Update BIRTHDAY_LIST environment variable." 
-  });
+// Add birthday
+app.post("/api/admin/birthdays", (req, res) => {
+  try {
+    const { name, date } = req.body;
+    
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Invalid name" });
+    }
+    
+    if (!date || typeof date !== "string" || !date.match(/^\d{2}-\d{2}$/)) {
+      return res.status(400).json({ error: "Invalid date format. Use MM-DD" });
+    }
+    
+    const birthdayList = loadBirthdays();
+    const newBirthday = { name: name.trim(), date };
+    
+    // Check for duplicates
+    const exists = birthdayList.some(b => b.name === newBirthday.name && b.date === newBirthday.date);
+    if (exists) {
+      return res.status(400).json({ error: "Birthday already exists" });
+    }
+    
+    birthdayList.push(newBirthday);
+    writeJsonAtomic(BIRTHDAYS_FILE, birthdayList);
+    
+    res.json({ ok: true, birthdays: birthdayList });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Failed to add birthday" });
+  }
+});
+
+// Remove birthday
+app.delete("/api/admin/birthdays", (req, res) => {
+  try {
+    const { name, date } = req.body;
+    
+    if (!name || !date) {
+      return res.status(400).json({ error: "Name and date required" });
+    }
+    
+    const birthdayList = loadBirthdays();
+    const filtered = birthdayList.filter(b => !(b.name === name && b.date === date));
+    
+    if (filtered.length === birthdayList.length) {
+      return res.status(404).json({ error: "Birthday not found" });
+    }
+    
+    writeJsonAtomic(BIRTHDAYS_FILE, filtered);
+    
+    res.json({ ok: true, birthdays: filtered });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Failed to remove birthday" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Known Devices API
+// ---------------------------------------------------------------------------
+
+// Get all known devices for admin management
+app.get("/api/admin/devices", (_req, res) => {
+  try {
+    res.json({ devices: KNOWN_DEVICES });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Device service error" });
+  }
+});
+
+// Add known device
+app.post("/api/admin/devices", (req, res) => {
+  try {
+    const { name, macs, ips } = req.body;
+    
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Invalid name" });
+    }
+    
+    const newDevice = normDevice({
+      name: name.trim(),
+      macs: Array.isArray(macs) ? macs : [],
+      ips: Array.isArray(ips) ? ips : []
+    });
+    
+    // Check for duplicate names
+    const exists = KNOWN_DEVICES.some(d => d.name === newDevice.name);
+    if (exists) {
+      return res.status(400).json({ error: "Device name already exists" });
+    }
+    
+    KNOWN_DEVICES.push(newDevice);
+    writeJsonAtomic(KNOWN_DEVICES_FILE, KNOWN_DEVICES);
+    
+    res.json({ ok: true, devices: KNOWN_DEVICES });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Failed to add device" });
+  }
+});
+
+// Remove known device
+app.delete("/api/admin/devices", (req, res) => {
+  try {
+    const { name } = req.body;
+    
+    if (!name || typeof name !== "string") {
+      return res.status(400).json({ error: "Device name required" });
+    }
+    
+    const initialLength = KNOWN_DEVICES.length;
+    KNOWN_DEVICES.splice(0, KNOWN_DEVICES.length, ...KNOWN_DEVICES.filter(d => d.name !== name));
+    
+    if (KNOWN_DEVICES.length === initialLength) {
+      return res.status(404).json({ error: "Device not found" });
+    }
+    
+    writeJsonAtomic(KNOWN_DEVICES_FILE, KNOWN_DEVICES);
+    
+    res.json({ ok: true, devices: KNOWN_DEVICES });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Failed to remove device" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Notifications API
+// ---------------------------------------------------------------------------
+
+// Get all notifications
+app.get("/api/admin/notifications", (_req, res) => {
+  try {
+    const notifications = readJsonSafe<Array<{ id: string; text: string; dates: string[] }>>(NOTIFICATIONS_FILE, []);
+    res.json({ notifications });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Notification service error" });
+  }
+});
+
+// Add notification
+app.post("/api/admin/notifications", (req, res) => {
+  try {
+    const { text, dates } = req.body;
+    
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return res.status(400).json({ error: "Invalid notification text" });
+    }
+    
+    if (!Array.isArray(dates) || dates.length === 0) {
+      return res.status(400).json({ error: "At least one date is required" });
+    }
+    
+    // Validate dates
+    const validDates = dates.filter(d => typeof d === "string" && d.match(/^\d{2}-\d{2}$/));
+    if (validDates.length === 0) {
+      return res.status(400).json({ error: "At least one valid date (MM-DD format) is required" });
+    }
+    
+    const notifications = readJsonSafe<Array<{ id: string; text: string; dates: string[] }>>(NOTIFICATIONS_FILE, []);
+    
+    const newNotification = {
+      id: Date.now().toString(),
+      text: text.trim().slice(0, 200), // Enforce 200 char limit
+      dates: validDates
+    };
+    
+    notifications.push(newNotification);
+    writeJsonAtomic(NOTIFICATIONS_FILE, notifications);
+    
+    res.json({ ok: true, notifications });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Failed to add notification" });
+  }
+});
+
+// Remove notification
+app.delete("/api/admin/notifications", (req, res) => {
+  try {
+    const { id } = req.body;
+    
+    if (!id || typeof id !== "string") {
+      return res.status(400).json({ error: "Notification ID required" });
+    }
+    
+    const notifications = readJsonSafe<Array<{ id: string; text: string; dates: string[] }>>(NOTIFICATIONS_FILE, []);
+    const filtered = notifications.filter(n => n.id !== id);
+    
+    if (filtered.length === notifications.length) {
+      return res.status(404).json({ error: "Notification not found" });
+    }
+    
+    writeJsonAtomic(NOTIFICATIONS_FILE, filtered);
+    
+    res.json({ ok: true, notifications: filtered });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Failed to remove notification" });
+  }
+});
+
+// Get notifications for a specific date (for main app)
+app.get("/api/notifications/date/:date", (req, res) => {
+  try {
+    const { date } = req.params;
+    
+    if (!date.match(/^\d{2}-\d{2}$/)) {
+      return res.status(400).json({ error: "Invalid date format. Use MM-DD" });
+    }
+    
+    const notifications = readJsonSafe<Array<{ id: string; text: string; dates: string[] }>>(NOTIFICATIONS_FILE, []);
+    const dateNotifications = notifications.filter(n => n.dates.includes(date));
+    
+    res.setHeader("Cache-Control", "public, max-age=300"); // Cache for 5 minutes
+    res.json({
+      date,
+      notifications: dateNotifications.map(n => ({ id: n.id, text: n.text }))
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Notification service error" });
+  }
 });
 
 // ---------------------------------------------------------------------------

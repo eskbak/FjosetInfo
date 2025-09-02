@@ -21,6 +21,12 @@ interface Birthday {
   date: string; // MM-DD format
 }
 
+interface KnownDevice {
+  name: string;
+  macs: string[];
+  ips: string[];
+}
+
 interface Notification {
   id: string;
   text: string;
@@ -39,12 +45,14 @@ export default function AdminPage() {
   
   // Birthday state
   const [birthdays, setBirthdays] = useState<Birthday[]>([]);
-  const [birthdaysChanged, setBirthdaysChanged] = useState(false);
   const [newBirthday, setNewBirthday] = useState({ name: "", date: "" });
   
-  // Notification state (stub)
+  // Known Devices state
+  const [knownDevices, setKnownDevices] = useState<KnownDevice[]>([]);
+  const [newDevice, setNewDevice] = useState({ name: "", macs: "", ips: "" });
+  
+  // Notification state
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [notificationsChanged, setNotificationsChanged] = useState(false);
   const [newNotification, setNewNotification] = useState({ text: "", dates: "" });
 
   // Theme (replicating main app theming)
@@ -102,8 +110,19 @@ export default function AdminPage() {
           setBirthdays(birthdaysData.birthdays || []);
         }
         
-        // Load notifications (stub - empty for now)
-        setNotifications([]);
+        // Load known devices
+        const devicesRes = await fetch("/api/admin/devices");
+        if (devicesRes.ok) {
+          const devicesData = await devicesRes.json();
+          setKnownDevices(devicesData.devices || []);
+        }
+        
+        // Load notifications
+        const notificationsRes = await fetch("/api/admin/notifications");
+        if (notificationsRes.ok) {
+          const notificationsData = await notificationsRes.json();
+          setNotifications(notificationsData.notifications || []);
+        }
       } catch {
         console.error("Failed to load admin data");
       }
@@ -149,25 +168,112 @@ export default function AdminPage() {
   };
 
   // Add birthday
-  const addBirthday = () => {
+  const addBirthday = async () => {
     if (!newBirthday.name.trim() || !newBirthday.date.match(/^\d{2}-\d{2}$/)) {
       alert("Please enter a valid name and date (MM-DD format)");
       return;
     }
     
-    setBirthdays([...birthdays, { ...newBirthday, name: newBirthday.name.trim() }]);
-    setNewBirthday({ name: "", date: "" });
-    setBirthdaysChanged(true);
+    try {
+      const response = await fetch("/api/admin/birthdays", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newBirthday.name.trim(),
+          date: newBirthday.date
+        }),
+      });
+      
+      const result = await response.json();
+      if (result.ok) {
+        setBirthdays(result.birthdays);
+        setNewBirthday({ name: "", date: "" });
+      } else {
+        alert(result.error || "Failed to add birthday");
+      }
+    } catch (error) {
+      alert("Network error while adding birthday");
+    }
   };
 
   // Remove birthday
-  const removeBirthday = (index: number) => {
-    setBirthdays(birthdays.filter((_, i) => i !== index));
-    setBirthdaysChanged(true);
+  const removeBirthday = async (birthday: Birthday) => {
+    try {
+      const response = await fetch("/api/admin/birthdays", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: birthday.name,
+          date: birthday.date
+        }),
+      });
+      
+      const result = await response.json();
+      if (result.ok) {
+        setBirthdays(result.birthdays);
+      } else {
+        alert(result.error || "Failed to remove birthday");
+      }
+    } catch (error) {
+      alert("Network error while removing birthday");
+    }
   };
 
-  // Add notification (stub)
-  const addNotification = () => {
+  // Add known device
+  const addDevice = async () => {
+    if (!newDevice.name.trim()) {
+      alert("Please enter a device name");
+      return;
+    }
+    
+    const macs = newDevice.macs.split(",").map(m => m.trim()).filter(Boolean);
+    const ips = newDevice.ips.split(",").map(ip => ip.trim()).filter(Boolean);
+    
+    try {
+      const response = await fetch("/api/admin/devices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newDevice.name.trim(),
+          macs,
+          ips
+        }),
+      });
+      
+      const result = await response.json();
+      if (result.ok) {
+        setKnownDevices(result.devices);
+        setNewDevice({ name: "", macs: "", ips: "" });
+      } else {
+        alert(result.error || "Failed to add device");
+      }
+    } catch (error) {
+      alert("Network error while adding device");
+    }
+  };
+
+  // Remove known device
+  const removeDevice = async (deviceName: string) => {
+    try {
+      const response = await fetch("/api/admin/devices", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: deviceName }),
+      });
+      
+      const result = await response.json();
+      if (result.ok) {
+        setKnownDevices(result.devices);
+      } else {
+        alert(result.error || "Failed to remove device");
+      }
+    } catch (error) {
+      alert("Network error while removing device");
+    }
+  };
+
+  // Add notification (no save button needed as requested)
+  const addNotification = async () => {
     if (!newNotification.text.trim() || !newNotification.dates.trim()) {
       alert("Please enter notification text and dates");
       return;
@@ -179,21 +285,46 @@ export default function AdminPage() {
       return;
     }
     
-    const notification: Notification = {
-      id: Date.now().toString(),
-      text: newNotification.text.trim(),
-      dates,
-    };
-    
-    setNotifications([...notifications, notification]);
-    setNewNotification({ text: "", dates: "" });
-    setNotificationsChanged(true);
+    try {
+      const response = await fetch("/api/admin/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: newNotification.text.trim(),
+          dates
+        }),
+      });
+      
+      const result = await response.json();
+      if (result.ok) {
+        setNotifications(result.notifications);
+        setNewNotification({ text: "", dates: "" });
+      } else {
+        alert(result.error || "Failed to add notification");
+      }
+    } catch (error) {
+      alert("Network error while adding notification");
+    }
   };
 
   // Remove notification
-  const removeNotification = (id: string) => {
-    setNotifications(notifications.filter(n => n.id !== id));
-    setNotificationsChanged(true);
+  const removeNotification = async (id: string) => {
+    try {
+      const response = await fetch("/api/admin/notifications", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      
+      const result = await response.json();
+      if (result.ok) {
+        setNotifications(result.notifications);
+      } else {
+        alert(result.error || "Failed to remove notification");
+      }
+    } catch (error) {
+      alert("Network error while removing notification");
+    }
   };
 
   if (!isAuthenticated) {
@@ -599,7 +730,7 @@ export default function AdminPage() {
                     >
                       <span>{birthday.name} - {birthday.date}</span>
                       <button
-                        onClick={() => removeBirthday(index)}
+                        onClick={() => removeBirthday(birthday)}
                         style={{
                           padding: "4px 8px",
                           background: "#ef4444",
@@ -617,33 +748,149 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
-
-            {/* Birthday Actions */}
-            {birthdaysChanged && (
-              <div style={{ 
-                display: "flex", 
-                gap: "12px", 
-                paddingTop: "16px", 
-                borderTop: `1px solid ${theme.border}`,
-                marginTop: "16px"
-              }}>
-                <div style={{ 
-                  padding: "12px", 
-                  background: "#fbbf24", 
-                  color: "#92400e", 
-                  borderRadius: "8px",
-                  fontSize: "14px",
-                  flex: 1
-                }}>
-                  <strong>Note:</strong> Birthday changes require manual update of the BIRTHDAY_LIST environment variable. 
-                  Current value: {JSON.stringify(birthdays)}
-                </div>
-              </div>
-            )}
           </div>
         </section>
 
-        {/* Notifications Section (Stub) */}
+        {/* Known Devices Section */}
+        <section style={{ marginBottom: "40px" }}>
+          <h2 style={{ marginBottom: "20px", fontSize: "20px" }}>Known Devices Management</h2>
+          
+          <div style={{
+            background: theme.card,
+            border: `1px solid ${theme.border}`,
+            borderRadius: "12px",
+            padding: "20px"
+          }}>
+            {/* Add Device */}
+            <div style={{ marginBottom: "20px", paddingBottom: "20px", borderBottom: `1px solid ${theme.border}` }}>
+              <h3 style={{ marginBottom: "12px", fontSize: "16px" }}>Add Device</h3>
+              <div style={{ display: "grid", gap: "12px" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>Name</label>
+                  <input
+                    type="text"
+                    value={newDevice.name}
+                    onChange={(e) => setNewDevice({ ...newDevice, name: e.target.value })}
+                    placeholder="Device name"
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: `1px solid ${theme.border}`,
+                      borderRadius: "4px",
+                      background: theme.bg,
+                      color: theme.text,
+                      boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>MAC Addresses (comma separated)</label>
+                  <input
+                    type="text"
+                    value={newDevice.macs}
+                    onChange={(e) => setNewDevice({ ...newDevice, macs: e.target.value })}
+                    placeholder="aa:bb:cc:dd:ee:ff, 11:22:33:44:55:66"
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: `1px solid ${theme.border}`,
+                      borderRadius: "4px",
+                      background: theme.bg,
+                      color: theme.text,
+                      boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>IP Addresses (comma separated)</label>
+                  <input
+                    type="text"
+                    value={newDevice.ips}
+                    onChange={(e) => setNewDevice({ ...newDevice, ips: e.target.value })}
+                    placeholder="192.168.1.100, 192.168.1.101"
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: `1px solid ${theme.border}`,
+                      borderRadius: "4px",
+                      background: theme.bg,
+                      color: theme.text,
+                      boxSizing: "border-box"
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={addDevice}
+                  style={{
+                    padding: "10px 20px",
+                    background: "#3b82f6",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    justifySelf: "start"
+                  }}
+                >
+                  Add Device
+                </button>
+              </div>
+            </div>
+
+            {/* Device List */}
+            <div>
+              <h3 style={{ marginBottom: "12px", fontSize: "16px" }}>Current Devices</h3>
+              {knownDevices.length === 0 ? (
+                <p style={{ opacity: 0.7, fontStyle: "italic" }}>No devices configured</p>
+              ) : (
+                <div style={{ display: "grid", gap: "12px" }}>
+                  {knownDevices.map((device, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        padding: "16px",
+                        background: theme.bg,
+                        border: `1px solid ${theme.border}`,
+                        borderRadius: "8px"
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: "12px" }}>
+                        <div style={{ flex: 1 }}>
+                          <p style={{ margin: "0 0 8px 0", fontWeight: "500" }}>{device.name}</p>
+                          {device.macs.length > 0 && (
+                            <p style={{ margin: "0 0 4px 0", fontSize: "14px", opacity: 0.7 }}>
+                              MACs: {device.macs.join(", ")}
+                            </p>
+                          )}
+                          {device.ips.length > 0 && (
+                            <p style={{ margin: 0, fontSize: "14px", opacity: 0.7 }}>
+                              IPs: {device.ips.join(", ")}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => removeDevice(device.name)}
+                          style={{
+                            padding: "4px 8px",
+                            background: "#ef4444",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "12px"
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Notifications Section */}
         <section>
           <h2 style={{ marginBottom: "20px", fontSize: "20px" }}>Notification Management</h2>
           
@@ -754,64 +1001,6 @@ export default function AdminPage() {
                   ))}
                 </div>
               )}
-            </div>
-
-            {/* Notification Actions */}
-            {notificationsChanged && (
-              <div style={{ 
-                display: "flex", 
-                gap: "12px", 
-                paddingTop: "16px", 
-                borderTop: `1px solid ${theme.border}`,
-                marginTop: "16px"
-              }}>
-                <button
-                  onClick={() => {
-                    // This is a stub - in a real implementation this would save to backend
-                    alert("Notification functionality is currently a stub. Backend integration needed.");
-                    setNotificationsChanged(false);
-                  }}
-                  style={{
-                    padding: "10px 20px",
-                    background: "#10b981",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontWeight: "500"
-                  }}
-                >
-                  Save Notifications (Stub)
-                </button>
-                <button
-                  onClick={() => {
-                    setNotifications([]);
-                    setNotificationsChanged(false);
-                  }}
-                  style={{
-                    padding: "10px 20px",
-                    background: theme.bg,
-                    color: theme.text,
-                    border: `1px solid ${theme.border}`,
-                    borderRadius: "8px",
-                    cursor: "pointer"
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
-
-            <div style={{ 
-              marginTop: "16px",
-              padding: "12px", 
-              background: "#dbeafe", 
-              color: "#1e40af", 
-              borderRadius: "8px",
-              fontSize: "14px"
-            }}>
-              <strong>Note:</strong> Notification management is currently a stub implementation. 
-              Backend integration is needed to persist notifications and integrate with the main app display.
             </div>
           </div>
         </section>

@@ -74,3 +74,8 @@ test-results/
 # Misc
 .idea/
 *.iml
+
+# Local data files (admin-managed)
+birthdays.json
+known-devices.json
+notifications.json
