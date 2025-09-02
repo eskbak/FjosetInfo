@@ -37,22 +37,36 @@ export default function NRKCard({ theme, isDay, colors, rotateMs = 10000 }: Prop
   //   fixed height: height: 520
   //   responsive cap: maxHeight: "70vh"
   const cardStyle: React.CSSProperties = {
-    flex: "0 0 auto",
+    flex: "1 1 auto", // Allow the card to grow and shrink
     width: "100%",
     background: theme.card,
     borderRadius: 20,
     padding: 20,
     border: `1px solid ${theme.border}`,
     boxSizing: "border-box",
-    // height: 520,          // <— uncomment/set if you want a fixed card height
-    // maxHeight: "70vh",    // <— or use a responsive cap
+    minHeight: 0, // Allow shrinking below content size
+    maxHeight: "100%", // Don't exceed parent container
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden", // Prevent content from overflowing the card
   };
 
   if (!nrk?.items?.length) {
     return (
       <section style={cardStyle}>
-        <div style={{ opacity: 0.7, textAlign: "center", fontSize: "3.0em", padding: 40 }}>Laster nyheter…</div>
-          <PoweredBy logo={isDay ? nrkLogoLight : nrkLogoDark} alt="YR logo" />
+        <div style={{ 
+          opacity: 0.7, 
+          textAlign: "center", 
+          fontSize: "3.0em", 
+          padding: 40,
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center"
+        }}>
+          Laster nyheter…
+        </div>
+        <PoweredBy logo={isDay ? nrkLogoLight : nrkLogoDark} alt="YR logo" />
       </section>
     );
   }
@@ -61,7 +75,7 @@ export default function NRKCard({ theme, isDay, colors, rotateMs = 10000 }: Prop
   const hasImage = Boolean(it.image);
 
   // ⬇⬇⬇ Adjust the IMAGE HEIGHT here (full-width image on top)
-  const IMAGE_HEIGHT = "clamp(180px, 28vh, 420px)";
+  const IMAGE_HEIGHT = "clamp(120px, 20vh, 300px)"; // Reduced max height for better fit
 
   return (
     <section style={cardStyle}>
@@ -69,11 +83,13 @@ export default function NRKCard({ theme, isDay, colors, rotateMs = 10000 }: Prop
         style={{
           borderRadius: 14,
           padding: "1em",
-          display: "grid",
-          gridTemplateColumns: "1fr",
-          gridTemplateRows: "auto auto 1fr auto",
+          display: "flex",
+          flexDirection: "column",
           gap: 20,
           alignItems: "start",
+          flex: 1,
+          minHeight: 0, // Allow shrinking
+          overflow: "hidden", // Prevent content overflow
         }}
       >
         {/* IMAGE ON TOP, FULL WIDTH */}
@@ -101,7 +117,14 @@ export default function NRKCard({ theme, isDay, colors, rotateMs = 10000 }: Prop
         </div>
 
         {/* DESCRIPTION */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
+        <div style={{ 
+          display: "flex", 
+          flexDirection: "column", 
+          gap: 12, 
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden"
+        }}>
           {it.description && (
             <div
               style={{
@@ -110,7 +133,7 @@ export default function NRKCard({ theme, isDay, colors, rotateMs = 10000 }: Prop
                 fontWeight: 200,
                 lineHeight: 1.2,
                 display: "-webkit-box",
-                WebkitLineClamp: 6,
+                WebkitLineClamp: 4, // Reduced from 6 to fit better
                 WebkitBoxOrient: "vertical",
                 overflow: "hidden",
                 minHeight: 0,
@@ -134,6 +157,7 @@ export default function NRKCard({ theme, isDay, colors, rotateMs = 10000 }: Prop
             marginTop: 4,
             minHeight: 0,
             flexWrap: "wrap",
+            flexShrink: 0, // Don't shrink the dots section
           }}
         >
           {nrk.items.map((_: any, i: number) => (
@@ -151,7 +175,7 @@ export default function NRKCard({ theme, isDay, colors, rotateMs = 10000 }: Prop
         </div>
       </article>
 
-          <PoweredBy logo={isDay ? nrkLogoLight : nrkLogoDark} alt="YR logo" />
+      <PoweredBy logo={isDay ? nrkLogoLight : nrkLogoDark} alt="YR logo" />
     </section>
   );
 }
