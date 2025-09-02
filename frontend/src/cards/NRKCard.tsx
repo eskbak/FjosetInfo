@@ -118,7 +118,7 @@ const cardStyle: React.CSSProperties = {
         )}
 
         {/* HEADER / TITLE */}
-        <div>
+        <div style={{ justifyContent: "center", display: "flex", }}>
           <div
   style={{
     fontWeight: 600,

@@ -4,7 +4,6 @@ import BirthdayNotification from "./components/BirthdayNotification";
 import DashboardView from "./views/DashboardView";
 import NewsView from "./views/NewsView";
 import CalendarView from "./views/CalendarView";
-import GlobalOverlays from "./components/GlobalOverlays";
 import ArrivalOverlay from "./components/ArrivalOverlay";
 import PresenceDock from "./components/PresenceDock";
 import type { Theme, Colors } from "./types";
@@ -211,9 +210,6 @@ const tick = async () => {
       
       {/* Birthday notification */}
       <BirthdayNotification theme={theme} />
-
-      {/* overlays visible across all views */}
-      <GlobalOverlays />
 
       <PresenceDock />
 
