@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Header from "./components/Header";
+import BirthdayNotification from "./components/BirthdayNotification";
 import DashboardView from "./views/DashboardView";
 import NewsView from "./views/NewsView";
 import CalendarView from "./views/CalendarView";
@@ -219,6 +220,9 @@ const tick = async () => {
   return (
     <div style={pageStyle}>
       <Header todayText={todayNo} />
+      
+      {/* Birthday notification */}
+      <BirthdayNotification theme={theme} />
 
       {/* overlays visible across all views */}
       <GlobalOverlays />

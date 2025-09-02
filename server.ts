@@ -849,6 +849,50 @@ app.post("/api/tts/play", async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Birthday API
+// ---------------------------------------------------------------------------
+app.get("/api/birthdays/today", (_req, res) => {
+  try {
+    const birthdayListEnv = process.env.BIRTHDAY_LIST || "[]";
+    let birthdayList: Array<{ name: string; date: string }> = [];
+    
+    try {
+      birthdayList = JSON.parse(birthdayListEnv);
+    } catch (e) {
+      console.error("Failed to parse BIRTHDAY_LIST:", e);
+      return res.status(500).json({ error: "Invalid birthday list format" });
+    }
+
+    if (!Array.isArray(birthdayList)) {
+      return res.status(500).json({ error: "Birthday list must be an array" });
+    }
+
+    // Get today's date in MM-DD format
+    const today = new Date();
+    const todayMD = String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+
+    // Find birthdays matching today
+    const todaysBirthdays = birthdayList
+      .filter(birthday => {
+        if (!birthday || typeof birthday.name !== "string" || typeof birthday.date !== "string") {
+          return false;
+        }
+        return birthday.date === todayMD;
+      })
+      .map(birthday => ({ name: birthday.name.trim() }))
+      .filter(birthday => birthday.name.length > 0);
+
+    res.setHeader("Cache-Control", "public, max-age=300"); // Cache for 5 minutes
+    res.json({
+      today: todayMD,
+      birthdays: todaysBirthdays,
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Birthday service error" });
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Overlays API
 // ---------------------------------------------------------------------------
 app.get("/api/overlays", (_req, res) => {
