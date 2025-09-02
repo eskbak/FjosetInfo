@@ -17,8 +17,26 @@ export default function NRKCard({ theme, isDay, colors, rotateMs = 10000 }: Prop
 
   useEffect(() => {
     const fetchNrk = async () => {
-      const r = await fetch(`/api/nrk/latest`);
-      setNrk(await r.json());
+      try {
+        const r = await fetch(`/api/nrk/latest`);
+        setNrk(await r.json());
+      } catch (error) {
+        // Mock data for testing overflow behavior
+        setNrk({
+          items: [
+            {
+              title: "This is a very long news title that might cause overflow issues in the layout and needs to be tested properly",
+              description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium.",
+              image: "https://via.placeholder.com/800x400/3600e6/ffffff?text=Test+News+Image"
+            },
+            {
+              title: "Another news item",
+              description: "Short description for testing",
+              image: "https://via.placeholder.com/800x400/870000/ffffff?text=News+2"
+            }
+          ]
+        });
+      }
     };
     fetchNrk();
     const poll = setInterval(fetchNrk, 120_000);
