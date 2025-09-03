@@ -21,6 +21,7 @@ export function useFileChangeEvents(handlers: {
 
   useEffect(() => {
     // Create EventSource connection
+    // Always use the proxy in all environments for consistency
     const eventSource = new EventSource('/api/events');
     eventSourceRef.current = eventSource;
 

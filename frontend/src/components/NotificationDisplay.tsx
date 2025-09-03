@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Theme } from "../types";
-import { useFileChangeEvents } from "../hooks/useFileChangeEvents";
+import { useSettingsContext } from "../contexts/SettingsContext";
 
 interface Notification {
   id: string;
@@ -13,6 +13,7 @@ interface NotificationDisplayProps {
 
 export default function NotificationDisplay({ theme }: NotificationDisplayProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const { onNotificationsChange } = useSettingsContext();
 
   const fetchNotifications = async () => {
     try {
@@ -52,13 +53,14 @@ export default function NotificationDisplay({ theme }: NotificationDisplayProps)
     };
   }, []);
 
-  // Use file change events instead of polling
-  useFileChangeEvents({
-    onNotificationsChange: () => {
+  // Register for notification change events through centralized system
+  useEffect(() => {
+    const unsubscribe = onNotificationsChange(() => {
       console.log('🔄 Notifications file changed, reloading...');
       fetchNotifications();
-    }
-  });
+    });
+    return unsubscribe;
+  }, [onNotificationsChange]);
 
   const visibleNotifications = notifications;
 

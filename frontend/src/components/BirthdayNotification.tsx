@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Theme } from "../types";
-import { useFileChangeEvents } from "../hooks/useFileChangeEvents";
+import { useSettingsContext } from "../contexts/SettingsContext";
 
 interface BirthdayData {
   today: string;
@@ -14,6 +14,7 @@ interface BirthdayNotificationProps {
 export default function BirthdayNotification({ theme }: BirthdayNotificationProps) {
   const [birthdays, setBirthdays] = useState<BirthdayData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const { onBirthdaysChange } = useSettingsContext();
 
   const fetchBirthdays = async () => {
     try {
@@ -33,13 +34,14 @@ export default function BirthdayNotification({ theme }: BirthdayNotificationProp
     fetchBirthdays();
   }, []);
 
-  // Use file change events instead of polling
-  useFileChangeEvents({
-    onBirthdaysChange: () => {
+  // Register for birthday change events through centralized system
+  useEffect(() => {
+    const unsubscribe = onBirthdaysChange(() => {
       console.log('🔄 Birthdays file changed, reloading...');
       fetchBirthdays();
-    }
-  });
+    });
+    return unsubscribe;
+  }, [onBirthdaysChange]);
 
   // Don't render if loading, no birthdays, or dismissed
   if (loading || !birthdays || birthdays.birthdays.length === 0) {

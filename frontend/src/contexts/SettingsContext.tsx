@@ -14,6 +14,10 @@ interface SettingsContextType {
   loading: boolean;
   updateSettings: (newSettings: AppSettings) => Promise<boolean>;
   reloadSettings: () => Promise<void>;
+  // Event dispatch methods for other components to use
+  onBirthdaysChange: (callback: () => void) => void;
+  onNotificationsChange: (callback: () => void) => void;
+  onKnownDevicesChange: (callback: () => void) => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -21,6 +25,11 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
+  
+  // Callback registries for other components
+  const [birthdayCallbacks, setBirthdayCallbacks] = useState<Set<() => void>>(new Set());
+  const [notificationCallbacks, setNotificationCallbacks] = useState<Set<() => void>>(new Set());
+  const [deviceCallbacks, setDeviceCallbacks] = useState<Set<() => void>>(new Set());
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -81,15 +90,61 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     await fetchSettings();
   }, [fetchSettings]);
 
+  // Event registration methods
+  const onBirthdaysChange = useCallback((callback: () => void) => {
+    setBirthdayCallbacks(prev => new Set([...prev, callback]));
+    return () => {
+      setBirthdayCallbacks(prev => {
+        const next = new Set(prev);
+        next.delete(callback);
+        return next;
+      });
+    };
+  }, []);
+
+  const onNotificationsChange = useCallback((callback: () => void) => {
+    setNotificationCallbacks(prev => new Set([...prev, callback]));
+    return () => {
+      setNotificationCallbacks(prev => {
+        const next = new Set(prev);
+        next.delete(callback);
+        return next;
+      });
+    };
+  }, []);
+
+  const onKnownDevicesChange = useCallback((callback: () => void) => {
+    setDeviceCallbacks(prev => new Set([...prev, callback]));
+    return () => {
+      setDeviceCallbacks(prev => {
+        const next = new Set(prev);
+        next.delete(callback);
+        return next;
+      });
+    };
+  }, []);
+
   useEffect(() => {
     fetchSettings();
   }, [fetchSettings]);
 
-  // Use file change events instead of polling
+  // Single SSE connection for all file changes
   useFileChangeEvents({
     onSettingsChange: () => {
       console.log('🔄 Settings file changed, reloading...');
       fetchSettings();
+    },
+    onBirthdaysChange: () => {
+      console.log('🔄 Birthdays file changed, notifying components...');
+      birthdayCallbacks.forEach(callback => callback());
+    },
+    onNotificationsChange: () => {
+      console.log('🔄 Notifications file changed, notifying components...');
+      notificationCallbacks.forEach(callback => callback());
+    },
+    onKnownDevicesChange: () => {
+      console.log('🔄 Known devices file changed, notifying components...');
+      deviceCallbacks.forEach(callback => callback());
     }
   });
 
@@ -98,7 +153,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       settings, 
       loading, 
       updateSettings, 
-      reloadSettings 
+      reloadSettings,
+      onBirthdaysChange,
+      onNotificationsChange,
+      onKnownDevicesChange
     }}>
       {children}
     </SettingsContext.Provider>
