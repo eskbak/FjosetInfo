@@ -98,14 +98,11 @@ export default function NotificationDisplay({ theme }: NotificationDisplayProps)
     );
   }
 
-  // Multiple notifications - display as continuous scrolling carousel
+  // Multiple notifications - display as separate cards in carousel
   return (
     <div style={{ margin: "0 20px 20px 20px" }}>
       <div
         style={{
-          background: "linear-gradient(135deg, #15008e, #5a7bff)",
-          borderRadius: "12px",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
           overflow: "hidden",
           minHeight: "80px",
           position: "relative",
@@ -114,9 +111,8 @@ export default function NotificationDisplay({ theme }: NotificationDisplayProps)
         <div
           style={{
             display: "flex",
-            alignItems: "center",
             animation: "scroll-left 20s linear infinite",
-            whiteSpace: "nowrap",
+            gap: "20px",
           }}
         >
           {/* Duplicate notifications for seamless loop */}
@@ -124,13 +120,20 @@ export default function NotificationDisplay({ theme }: NotificationDisplayProps)
             <div
               key={`${notification.id}-${index}`}
               style={{
+                background: "linear-gradient(135deg, #15008e, #5a7bff)",
                 color: "#aeaeae",
-                padding: "10px 40px",
+                padding: "10px 20px",
+                borderRadius: "12px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
                 fontSize: "2.2em",
                 fontWeight: 600,
-                display: "inline-flex",
+                display: "flex",
                 alignItems: "center",
+                justifyContent: "center",
                 flexShrink: 0,
+                minWidth: "300px",
+                minHeight: "80px",
+                whiteSpace: "nowrap",
               }}
             >
               📢 {notification.text} 📢

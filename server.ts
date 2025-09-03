@@ -1628,11 +1628,31 @@ function initializeJsonFiles() {
     }
   }
 
-  // Ensure avatars directory exists
+  // Ensure avatars directory exists and copy default avatars if empty
   const avatarDir = path.join(__dirname, "avatars");
   if (!fs.existsSync(avatarDir)) {
     console.log(`📁 Creating avatars directory: ${avatarDir}`);
     fs.mkdirSync(avatarDir, { recursive: true });
+  }
+  
+  // Copy default avatars from frontend assets if directory is empty
+  const avatarFiles = fs.existsSync(avatarDir) ? fs.readdirSync(avatarDir).filter(f => f.endsWith('.png')) : [];
+  if (avatarFiles.length === 0) {
+    const defaultAvatarsDir = path.join(__dirname, "frontend", "src", "assets", "avatars");
+    if (fs.existsSync(defaultAvatarsDir)) {
+      console.log(`📷 Copying default avatars from ${defaultAvatarsDir} to ${avatarDir}`);
+      const defaultAvatars = fs.readdirSync(defaultAvatarsDir).filter(f => f.endsWith('.png'));
+      for (const avatar of defaultAvatars) {
+        const src = path.join(defaultAvatarsDir, avatar);
+        const dest = path.join(avatarDir, avatar);
+        try {
+          fs.copyFileSync(src, dest);
+          console.log(`📷 Copied avatar: ${avatar}`);
+        } catch (error) {
+          console.warn(`Failed to copy avatar ${avatar}:`, error);
+        }
+      }
+    }
   }
 }
 
