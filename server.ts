@@ -1408,10 +1408,10 @@ app.get("/api/health", (_req, res) => {
         const interfaces = os.networkInterfaces();
         const result: Record<string, string[]> = {};
         for (const [name, addrs] of Object.entries(interfaces)) {
-          if (addrs) {
+          if (addrs && Array.isArray(addrs)) {
             result[name] = addrs
-              .filter(addr => addr.family === 'IPv4')
-              .map(addr => addr.address);
+              .filter((addr: any) => addr.family === 'IPv4')
+              .map((addr: any) => addr.address);
           }
         }
         return result;
@@ -1561,7 +1561,7 @@ app.listen(PORT, HOST, () => {
   const ips = [];
   
   for (const [name, addrs] of Object.entries(interfaces)) {
-    if (addrs) {
+    if (addrs && Array.isArray(addrs)) {
       for (const addr of addrs) {
         if (addr.family === 'IPv4' && !addr.internal) {
           ips.push(`${name}: ${addr.address}`);
