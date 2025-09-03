@@ -137,6 +137,14 @@ const NOTIFICATIONS_FILE = process.env.NOTIFICATIONS_FILE
   ? path.resolve(process.cwd(), process.env.NOTIFICATIONS_FILE)
   : path.join(__dirname, "notifications.json");
 
+const sanitizeBase = (s: string) => {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-_]/g, "");
+}
+
 // Multer configuration for avatar uploads
 const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -147,8 +155,17 @@ const avatarStorage = multer.diskStorage({
     cb(null, avatarDir);
   },
   filename: (req, file, cb) => {
-    const name = req.body.name || req.query.name || 'unknown';
-    cb(null, `${name}.png`);
+    const avatarDir = path.join(__dirname, "avatars");
+
+    const rawName = 
+      (typeof req.body?.name === "string" && req.body.name) ||
+      (typeof req.query?.name === "string" && req.query.name) ||
+      "unknown";
+
+    const base = sanitizeBase(rawName) || "unknown";
+    let filename = `${base}.png`;
+
+    cb(null, filename);
   }
 });
 

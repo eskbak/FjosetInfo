@@ -237,8 +237,9 @@ export default function AdminPage() {
     try {
       // First upload the avatar
       const formData = new FormData();
-      formData.append('avatar', newDevice.avatar);
       formData.append('name', newDevice.name.trim());
+      formData.append('avatar', newDevice.avatar);
+
       
       const uploadResponse = await fetch("/api/admin/upload-avatar", {
         method: "POST",

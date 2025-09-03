@@ -1,8 +1,8 @@
 {
   "viewsEnabled": {
     "dashboard": true,
-    "news": false,
-    "calendar": false
+    "news": true,
+    "calendar": true
   },
   "dayHours": {
     "start": 0,
