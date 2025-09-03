@@ -280,8 +280,8 @@ export default function CalendarCard({
         {PEOPLE.map((p, pi) => {
           const laneCount = lanesByPerson[p].laneCount;
 
-          // Keep total person row height = 200px, preserving a gap between lanes.
-          const perLaneHeight = Math.max(24, (200 - GAP) / laneCount);
+          // Keep total person row height = 150px, preserving a gap between lanes.
+          const perLaneHeight = Math.max(24, (150 - GAP) / laneCount);
 
           const rowGrid: React.CSSProperties = {
             display:"grid",
