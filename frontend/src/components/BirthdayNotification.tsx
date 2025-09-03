@@ -15,21 +15,21 @@ export default function BirthdayNotification({ theme }: BirthdayNotificationProp
   const [birthdays, setBirthdays] = useState<BirthdayData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    const fetchBirthdays = async () => {
-      try {
-        const response = await fetch("/api/birthdays/today");
-        if (response.ok) {
-          const data: BirthdayData = await response.json();
-          setBirthdays(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch birthdays:", error);
-      } finally {
-        setLoading(false);
+  const fetchBirthdays = async () => {
+    try {
+      const response = await fetch("/api/birthdays/today");
+      if (response.ok) {
+        const data: BirthdayData = await response.json();
+        setBirthdays(data);
       }
-    };
+    } catch (error) {
+      console.error("Failed to fetch birthdays:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchBirthdays();
   }, []);
 
