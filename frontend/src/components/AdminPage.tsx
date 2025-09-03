@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { useSettingsContext } from "../contexts/SettingsContext";
 import type { Theme } from "../types";
+import type { AppSettings } from "../hooks/useSettings";
 
 // Settings type matching backend
 interface Settings {
@@ -18,7 +20,7 @@ interface Settings {
 
 interface Birthday {
   name: string;
-  date: string; // MM-DD format
+  date: string; // DD-MM format (changed from MM-DD)
 }
 
 interface KnownDevice {
@@ -30,7 +32,7 @@ interface KnownDevice {
 interface Notification {
   id: string;
   text: string;
-  dates: string[]; // Array of MM-DD format dates
+  dates: string[]; // Array of DD-MM format dates (changed from MM-DD)
 }
 
 export default function AdminPage() {
@@ -39,9 +41,10 @@ export default function AdminPage() {
   const [authError, setAuthError] = useState("");
   const [loading, setLoading] = useState(false);
   
-  // Settings state
-  const [settings, setSettings] = useState<Settings | null>(null);
+  // Use settings context for real-time updates
+  const { settings, updateSettings, reloadSettings } = useSettingsContext();
   const [settingsChanged, setSettingsChanged] = useState(false);
+  const [localSettings, setLocalSettings] = useState<AppSettings | null>(null);
   
   // Birthday state
   const [birthdays, setBirthdays] = useState<Birthday[]>([]);
@@ -90,19 +93,19 @@ export default function AdminPage() {
     }
   };
 
+  // Initialize localSettings from context when available
+  useEffect(() => {
+    if (settings && !localSettings) {
+      setLocalSettings(settings);
+    }
+  }, [settings, localSettings]);
+
   // Load data when authenticated
   useEffect(() => {
     if (!isAuthenticated) return;
     
     const loadData = async () => {
       try {
-        // Load settings
-        const settingsRes = await fetch("/api/settings");
-        if (settingsRes.ok) {
-          const settingsData = await settingsRes.json();
-          setSettings(settingsData);
-        }
-        
         // Load birthdays
         const birthdaysRes = await fetch("/api/admin/birthdays");
         if (birthdaysRes.ok) {
@@ -133,44 +136,28 @@ export default function AdminPage() {
 
   // Save settings
   const saveSettings = async () => {
-    if (!settings) return;
+    if (!localSettings) return;
     
-    try {
-      const response = await fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
-      });
-      
-      if (response.ok) {
-        setSettingsChanged(false);
-        alert("Settings saved successfully!");
-      } else {
-        alert("Failed to save settings");
-      }
-    } catch (error) {
-      alert("Network error while saving settings");
+    const success = await updateSettings(localSettings);
+    if (success) {
+      setSettingsChanged(false);
+      alert("Settings saved successfully!");
+    } else {
+      alert("Failed to save settings");
     }
   };
 
   // Cancel settings changes
   const cancelSettings = async () => {
-    try {
-      const response = await fetch("/api/settings");
-      if (response.ok) {
-        const data = await response.json();
-        setSettings(data);
-        setSettingsChanged(false);
-      }
-    } catch {
-      console.error("Failed to reload settings");
-    }
+    await reloadSettings();
+    setLocalSettings(settings);
+    setSettingsChanged(false);
   };
 
   // Add birthday
   const addBirthday = async () => {
     if (!newBirthday.name.trim() || !newBirthday.date.match(/^\d{2}-\d{2}$/)) {
-      alert("Please enter a valid name and date (MM-DD format)");
+      alert("Please enter a valid name and date (DD-MM format)");
       return;
     }
     
@@ -304,7 +291,7 @@ export default function AdminPage() {
     
     const dates = newNotification.dates.split(",").map(d => d.trim()).filter(d => d.match(/^\d{2}-\d{2}$/));
     if (dates.length === 0) {
-      alert("Please enter valid dates in MM-DD format, separated by commas");
+      alert("Please enter valid dates in DD-MM format, separated by commas");
       return;
     }
     
@@ -488,7 +475,7 @@ export default function AdminPage() {
         <section style={{ marginBottom: "40px" }}>
           <h2 style={{ marginBottom: "20px", fontSize: "20px" }}>App Settings</h2>
           
-          {settings && (
+          {localSettings && (
             <div style={{
               background: theme.card,
               border: `1px solid ${theme.border}`,
@@ -505,13 +492,15 @@ export default function AdminPage() {
                       type="number"
                       min="0"
                       max="23"
-                      value={settings.dayHours.start}
+                      value={localSettings?.dayHours.start || 0}
                       onChange={(e) => {
-                        setSettings({
-                          ...settings,
-                          dayHours: { ...settings.dayHours, start: parseInt(e.target.value) || 0 }
-                        });
-                        setSettingsChanged(true);
+                        if (localSettings) {
+                          setLocalSettings({
+                            ...localSettings,
+                            dayHours: { ...localSettings.dayHours, start: parseInt(e.target.value) || 0 }
+                          });
+                          setSettingsChanged(true);
+                        }
                       }}
                       style={{
                         marginLeft: "8px",
@@ -530,13 +519,15 @@ export default function AdminPage() {
                       type="number"
                       min="1"
                       max="24"
-                      value={settings.dayHours.end}
+                      value={localSettings?.dayHours.end || 18}
                       onChange={(e) => {
-                        setSettings({
-                          ...settings,
-                          dayHours: { ...settings.dayHours, end: parseInt(e.target.value) || 18 }
-                        });
-                        setSettingsChanged(true);
+                        if (localSettings) {
+                          setLocalSettings({
+                            ...localSettings,
+                            dayHours: { ...localSettings.dayHours, end: parseInt(e.target.value) || 18 }
+                          });
+                          setSettingsChanged(true);
+                        }
                       }}
                       style={{
                         marginLeft: "8px",
@@ -559,13 +550,15 @@ export default function AdminPage() {
                   type="number"
                   min="0"
                   max="14"
-                  value={settings.calendarDaysAhead}
+                  value={localSettings?.calendarDaysAhead || 5}
                   onChange={(e) => {
-                    setSettings({
-                      ...settings,
-                      calendarDaysAhead: parseInt(e.target.value) || 5
-                    });
-                    setSettingsChanged(true);
+                    if (localSettings) {
+                      setLocalSettings({
+                        ...localSettings,
+                        calendarDaysAhead: parseInt(e.target.value) || 5
+                      });
+                      setSettingsChanged(true);
+                    }
                   }}
                   style={{
                     padding: "8px",
@@ -585,13 +578,15 @@ export default function AdminPage() {
                   type="number"
                   min="5"
                   max="600"
-                  value={settings.rotateSeconds}
+                  value={localSettings?.rotateSeconds || 30}
                   onChange={(e) => {
-                    setSettings({
-                      ...settings,
-                      rotateSeconds: parseInt(e.target.value) || 30
-                    });
-                    setSettingsChanged(true);
+                    if (localSettings) {
+                      setLocalSettings({
+                        ...localSettings,
+                        rotateSeconds: parseInt(e.target.value) || 30
+                      });
+                      setSettingsChanged(true);
+                    }
                   }}
                   style={{
                     padding: "8px",
@@ -608,16 +603,16 @@ export default function AdminPage() {
               <div style={{ marginBottom: "20px" }}>
                 <h3 style={{ marginBottom: "12px", fontSize: "16px" }}>Enabled Views</h3>
                 <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-                  {Object.entries(settings.viewsEnabled).map(([view, enabled]) => (
+                  {localSettings && Object.entries(localSettings.viewsEnabled).map(([view, enabled]) => (
                     <label key={view} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <input
                         type="checkbox"
                         checked={enabled}
                         onChange={(e) => {
-                          setSettings({
-                            ...settings,
+                          setLocalSettings({
+                            ...localSettings,
                             viewsEnabled: {
-                              ...settings.viewsEnabled,
+                              ...localSettings.viewsEnabled,
                               [view]: e.target.checked
                             }
                           });
@@ -698,12 +693,12 @@ export default function AdminPage() {
                   />
                 </div>
                 <div>
-                  <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>Date (MM-DD)</label>
+                  <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>Date (DD-MM)</label>
                   <input
                     type="text"
                     value={newBirthday.date}
                     onChange={(e) => setNewBirthday({ ...newBirthday, date: e.target.value })}
-                    placeholder="MM-DD"
+                    placeholder="DD-MM"
                     pattern="\d{2}-\d{2}"
                     style={{
                       padding: "8px",
@@ -972,7 +967,7 @@ export default function AdminPage() {
                   <small style={{ opacity: 0.7 }}>{newNotification.text.length}/200 characters</small>
                 </div>
                 <div>
-                  <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>Dates (MM-DD, comma separated)</label>
+                  <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>Dates (DD-MM, comma separated)</label>
                   <input
                     type="text"
                     value={newNotification.dates}

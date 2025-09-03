@@ -8,7 +8,7 @@ import CalendarView from "./views/CalendarView";
 import ArrivalOverlay from "./components/ArrivalOverlay";
 import PresenceDock from "./components/PresenceDock";
 import AdminPage from "./components/AdminPage";
-import { useSettings } from "./hooks/useSettings";
+import { SettingsProvider, useSettingsContext } from "./contexts/SettingsContext";
 import type { Theme, Colors } from "./types";
 
 export default function App() {
@@ -26,18 +26,26 @@ export default function App() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  // If we're on admin route, render admin page
+  // If we're on admin route, render admin page with settings provider
   if (currentRoute === "admin") {
-    return <AdminPage />;
+    return (
+      <SettingsProvider>
+        <AdminPage />
+      </SettingsProvider>
+    );
   }
 
-  // Main app component
-  return <MainApp />;
+  // Main app component wrapped with settings provider
+  return (
+    <SettingsProvider>
+      <MainApp />
+    </SettingsProvider>
+  );
 }
 
 function MainApp() {
-  // Load settings from JSON file
-  const { settings, loading: settingsLoading } = useSettings();
+  // Load settings from context
+  const { settings, loading: settingsLoading } = useSettingsContext();
 
   // --- Arrival overlay state ---
   const [arrivalName, setArrivalName] = useState<string | null>(null);

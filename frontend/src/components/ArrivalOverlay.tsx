@@ -92,7 +92,7 @@ useEffect(() => {
   }, [durationMs]);
 
   // Determine avatar source - use provided override, server avatar, or fallback
-  const src = avatarSrc || (devices.some(d => d.name === name) ? `/avatars/${name}.png` : fallbackPng);
+  const src = avatarSrc || (devices.some(d => d.name === name) ? `/avatars/${name.toLowerCase()}.png` : fallbackPng);
 
   return (
     <div

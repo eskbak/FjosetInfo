@@ -999,19 +999,19 @@ app.get("/api/birthdays/today", (_req, res) => {
   try {
     const birthdayList = loadBirthdays();
 
-    // Get today's date in MM-DD format
+    // Get today's date in DD-MM format
     const today = new Date();
-    const todayMD = String(today.getMonth() + 1).padStart(2, "0") + "-" + String(today.getDate()).padStart(2, "0");
+    const todayDM = String(today.getDate()).padStart(2, "0") + "-" + String(today.getMonth() + 1).padStart(2, "0");
 
     // Find birthdays matching today
     const todaysBirthdays = birthdayList
-      .filter(birthday => birthday.date === todayMD)
+      .filter(birthday => birthday.date === todayDM)
       .map(birthday => ({ name: birthday.name.trim() }))
       .filter(birthday => birthday.name.length > 0);
 
     res.setHeader("Cache-Control", "public, max-age=300"); // Cache for 5 minutes
     res.json({
-      today: todayMD,
+      today: todayDM,
       birthdays: todaysBirthdays,
     });
   } catch (e: any) {
@@ -1061,7 +1061,7 @@ app.post("/api/admin/birthdays", (req, res) => {
     }
     
     if (!date || typeof date !== "string" || !date.match(/^\d{2}-\d{2}$/)) {
-      return res.status(400).json({ error: "Invalid date format. Use MM-DD" });
+      return res.status(400).json({ error: "Invalid date format. Use DD-MM" });
     }
     
     const birthdayList = loadBirthdays();
@@ -1209,7 +1209,7 @@ app.post("/api/admin/notifications", (req, res) => {
     // Validate dates
     const validDates = dates.filter(d => typeof d === "string" && d.match(/^\d{2}-\d{2}$/));
     if (validDates.length === 0) {
-      return res.status(400).json({ error: "At least one valid date (MM-DD format) is required" });
+      return res.status(400).json({ error: "At least one valid date (DD-MM format) is required" });
     }
     
     const notifications = readJsonSafe<Array<{ id: string; text: string; dates: string[] }>>(NOTIFICATIONS_FILE, []);
@@ -1259,7 +1259,7 @@ app.get("/api/notifications/date/:date", (req, res) => {
     const { date } = req.params;
     
     if (!date.match(/^\d{2}-\d{2}$/)) {
-      return res.status(400).json({ error: "Invalid date format. Use MM-DD" });
+      return res.status(400).json({ error: "Invalid date format. Use DD-MM" });
     }
     
     const notifications = readJsonSafe<Array<{ id: string; text: string; dates: string[] }>>(NOTIFICATIONS_FILE, []);

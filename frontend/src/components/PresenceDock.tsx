@@ -26,8 +26,9 @@ export default function PresenceDock({
   const avatarsMap = useMemo(() => {
     const map: Record<string, string> = {};
     devices.forEach(device => {
-      // Try to use server-side avatar first
-      map[device.name] = `/avatars/${device.name}.png`;
+      // Use lowercase device name for avatar filename to ensure consistency
+      const avatarFilename = device.name.toLowerCase();
+      map[device.name] = `/avatars/${avatarFilename}.png`;
     });
     return map;
   }, [devices]);
