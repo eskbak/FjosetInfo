@@ -18,8 +18,19 @@ export default function AtBCard({ theme, isDay, stopPlaceId, maxRows = 5 }: Prop
 
   useEffect(() => {
     const fetchEntur = async () => {
-      const r = await fetch(`/api/entur/departures?stopPlaceId=${encodeURIComponent(stopPlaceId)}&max=12`);
-      setEntur(await r.json());
+      try {
+        const r = await fetch(`/api/entur/departures?stopPlaceId=${encodeURIComponent(stopPlaceId)}&max=12`, {
+          signal: AbortSignal.timeout(10000), // 10 second timeout
+        });
+        if (r.ok) {
+          setEntur(await r.json());
+        } else {
+          console.warn('AtB API returned:', r.status, r.statusText);
+        }
+      } catch (error) {
+        console.warn('AtB API error:', error);
+        // Keep existing data on error
+      }
     };
     fetchEntur();
     const id = setInterval(fetchEntur, 60_000);

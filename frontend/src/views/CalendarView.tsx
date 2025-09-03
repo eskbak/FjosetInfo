@@ -5,13 +5,13 @@ export default function CalendarView({
   theme,
   colors,
   isDay,
+  daysAhead = 4,
 }: {
   theme: Theme;
   colors: Colors;
   isDay: boolean;
+  daysAhead?: number;
 }) {
-  // Use hardcoded daysAhead value (was previously from settings)
-  const daysAhead = 4;
 
   return (
     <main style={{ display: "flex", flexDirection: "column", flex: 1, gap: 20, marginTop: 20 }}>

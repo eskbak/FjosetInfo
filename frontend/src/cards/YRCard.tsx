@@ -132,8 +132,19 @@ export default function YRCard({ theme, isDay, lat, lon, hours = 5 }: Props) {
 
   useEffect(() => {
     const fetchYr = async () => {
-      const r = await fetch(`/api/yr/today?lat=${lat}&lon=${lon}&hours=${hours}`);
-      setYr(await r.json());
+      try {
+        const r = await fetch(`/api/yr/today?lat=${lat}&lon=${lon}&hours=${hours}`, {
+          signal: AbortSignal.timeout(10000), // 10 second timeout
+        });
+        if (r.ok) {
+          setYr(await r.json());
+        } else {
+          console.warn('Weather API returned:', r.status, r.statusText);
+        }
+      } catch (error) {
+        console.warn('Weather API error:', error);
+        // Keep existing data on error
+      }
     };
     fetchYr();
     const id = setInterval(fetchYr, 30 * 60_000);
