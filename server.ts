@@ -70,6 +70,15 @@ type GoogleEventItem = {
   end:   { date?: string; dateTime?: string; timeZone?: string };
 };
 
+type NotificationItem = {
+  id: string;
+  text: string;
+  color?: string;   // e.g. "FFFFFF" or "#FFFFFF"
+  dates?: string[]; // ["MM-DD", ...]
+  start?: string; // "HH:MM"
+  end?: string;   // "HH:MM"
+};
+
 type KnownDevice = { name: string; macs?: string[]; ips?: string[] };
 type NeighborRow = { ip: string; mac: string; state: string };
 
@@ -1071,6 +1080,88 @@ app.get("/oauth2callback", async (req, res) => {
     `);
   } catch (e: any) {
     res.status(500).send(e?.message || "OAuth callback error");
+  }
+});
+
+// ---- Paths -----------------------------------------------------------------
+const NOTIFICATIONS_FILE = process.env.NOTIFICATIONS_FILE
+  ? path.resolve(process.cwd(), process.env.NOTIFICATIONS_FILE)
+  : path.join(__dirname, "notifications.json");
+
+// ---- Helpers ---------------------------------------------------------------
+// Get today's date as "MM-DD" in Europe/Oslo (default), unless ?tz=... is provided.
+function todayMonthDay(tz = "Europe/Oslo") {
+  const fmt = new Intl.DateTimeFormat("en-GB", {
+    timeZone: tz,
+    month: "2-digit",
+    day: "2-digit",
+  });
+  // en-GB gives "DD/MM/…" – we only want month/day as numbers
+  const parts = fmt.formatToParts(new Date());
+  const dd = parts.find(p => p.type === "day")?.value ?? "01";
+  const mm = parts.find(p => p.type === "month")?.value ?? "01";
+  return `${mm}-${dd}`;
+}
+
+// Normalize hex like "FFF" | "FFFFFF" | "#FFF" | "#FFFFFF" to "#RRGGBB"
+function normalizeHex(hex?: string): string | null {
+  if (!hex) return null;
+  let s = hex.trim().replace(/^#/, "").toUpperCase();
+  if (s.length === 3) s = s.split("").map(c => c + c).join("");
+  if (/^[0-9A-F]{6}$/.test(s)) return `#${s}`;
+  return null;
+}
+
+function isWithinTimeWindow(start?: string, end?: string): boolean {
+  if (!start && !end) return true; // no restriction
+
+  const now = new Date();
+  const curMins = now.getHours() * 60 + now.getMinutes();
+
+  const parseMins = (s: string) => {
+    const [h, m] = s.split(":").map((x) => parseInt(x, 10));
+    return h * 60 + m;
+  };
+
+  const startMins = start ? parseMins(start) : 0;
+  const endMins = end ? parseMins(end) : 24 * 60;
+
+  return curMins >= startMins && curMins <= endMins;
+}
+
+// ---- Endpoint: today's notifications --------------------------------------
+app.get("/api/notifications/today", (req: Request, res: Response) => {
+  try {
+    const tz = typeof req.query.tz === "string" && req.query.tz ? req.query.tz : "Europe/Oslo";
+    const today = todayMonthDay(tz);
+
+    if (!fs.existsSync(NOTIFICATIONS_FILE)) {
+      return res.json({ today, notifications: [] });
+    }
+
+    const raw = fs.readFileSync(NOTIFICATIONS_FILE, "utf8");
+    let list: NotificationItem[] = [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) list = parsed as NotificationItem[];
+    } catch {
+      return res.status(500).json({ error: "Invalid notifications.json" });
+    }
+
+const todays = list
+  .filter(n => Array.isArray(n.dates) && n.dates.includes(today))
+  .filter(n => isWithinTimeWindow(n.start, n.end))   // <-- new time filter
+  .map(n => ({
+    id: String(n.id ?? ""),
+    text: String(n.text ?? "").trim(),
+    color: normalizeHex(n.color) ?? "#FFFFFF",
+  }))
+  .filter(n => n.id && n.text);
+
+    res.setHeader("Cache-Control", "public, max-age=30"); // quick refresh OK
+    return res.json({ today, notifications: todays });
+  } catch (e: any) {
+    return res.status(500).json({ error: e?.message || "notifications error" });
   }
 });
 

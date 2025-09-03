@@ -6,6 +6,7 @@ import NewsView from "./views/NewsView";
 import CalendarView from "./views/CalendarView";
 import ArrivalOverlay from "./components/ArrivalOverlay";
 import PresenceDock from "./components/PresenceDock";
+import NotificationsCard from "./cards/NotificationsCard";
 import type { Theme, Colors } from "./types";
 
 export default function App() {
@@ -208,6 +209,8 @@ const tick = async () => {
     <div style={pageStyle}>
       <Header todayText={todayNo} />
       
+      <NotificationsCard theme={theme} colors={COLORS} isDay={isDay} rotateMs={10000} />
+
       {/* Birthday notification */}
       <BirthdayNotification theme={theme} />
 
