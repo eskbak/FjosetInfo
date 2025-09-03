@@ -37,6 +37,11 @@ export default function NotificationDisplay({ theme }: NotificationDisplayProps)
 
     fetchNotifications();
 
+    // Poll for notification changes every 60 seconds to sync across devices
+    const pollInterval = setInterval(() => {
+      fetchNotifications();
+    }, 60000);
+
     // Refresh notifications at midnight
     const now = new Date();
     const tomorrow = new Date(now);
@@ -48,7 +53,10 @@ export default function NotificationDisplay({ theme }: NotificationDisplayProps)
       fetchNotifications();
     }, timeUntilMidnight);
 
-    return () => clearTimeout(midnightTimer);
+    return () => {
+      clearInterval(pollInterval);
+      clearTimeout(midnightTimer);
+    };
   }, []);
 
   // Auto-rotate notifications if there are multiple

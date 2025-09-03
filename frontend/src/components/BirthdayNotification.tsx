@@ -30,6 +30,13 @@ export default function BirthdayNotification({ theme }: BirthdayNotificationProp
     };
 
     fetchBirthdays();
+    
+    // Poll for birthday changes every 60 seconds to sync across devices
+    const pollInterval = setInterval(() => {
+      fetchBirthdays();
+    }, 60000);
+    
+    return () => clearInterval(pollInterval);
   }, []);
 
   // Don't render if loading, no birthdays, or dismissed

@@ -82,6 +82,13 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchSettings();
+    
+    // Poll for settings changes every 30 seconds to sync across devices
+    const pollInterval = setInterval(() => {
+      fetchSettings();
+    }, 30000);
+    
+    return () => clearInterval(pollInterval);
   }, [fetchSettings]);
 
   return (
