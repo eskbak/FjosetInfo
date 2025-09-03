@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Theme } from "../types";
+import { useFileChangeEvents } from "../hooks/useFileChangeEvents";
 
 interface BirthdayData {
   today: string;
@@ -30,14 +31,15 @@ export default function BirthdayNotification({ theme }: BirthdayNotificationProp
     };
 
     fetchBirthdays();
-    
-    // Poll for birthday changes every 60 seconds to sync across devices
-    const pollInterval = setInterval(() => {
-      fetchBirthdays();
-    }, 60000);
-    
-    return () => clearInterval(pollInterval);
   }, []);
+
+  // Use file change events instead of polling
+  useFileChangeEvents({
+    onBirthdaysChange: () => {
+      console.log('🔄 Birthdays file changed, reloading...');
+      fetchBirthdays();
+    }
+  });
 
   // Don't render if loading, no birthdays, or dismissed
   if (loading || !birthdays || birthdays.birthdays.length === 0) {

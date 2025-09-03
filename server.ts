@@ -137,6 +137,64 @@ const NOTIFICATIONS_FILE = process.env.NOTIFICATIONS_FILE
   ? path.resolve(process.cwd(), process.env.NOTIFICATIONS_FILE)
   : path.join(__dirname, "notifications.json");
 
+// ---------------------------------------------------------------------------
+// File Watching & Server-Sent Events
+// ---------------------------------------------------------------------------
+
+// Track active SSE connections
+const sseClients = new Set<Response>();
+
+// File watching setup
+const watchedFiles = {
+  settings: SETTINGS_FILE,
+  birthdays: BIRTHDAYS_FILE,
+  notifications: NOTIFICATIONS_FILE,
+  knownDevices: KNOWN_DEVICES_FILE,
+} as const;
+
+type FileChangeEvent = {
+  type: keyof typeof watchedFiles;
+  timestamp: number;
+};
+
+function broadcastFileChange(type: keyof typeof watchedFiles) {
+  const event: FileChangeEvent = {
+    type,
+    timestamp: Date.now(),
+  };
+  
+  const data = `data: ${JSON.stringify(event)}\n\n`;
+  
+  // Send to all connected SSE clients
+  for (const client of sseClients) {
+    try {
+      client.write(data);
+    } catch (error) {
+      // Remove dead clients
+      sseClients.delete(client);
+    }
+  }
+  
+  console.log(`📡 Broadcasting file change: ${type} to ${sseClients.size} clients`);
+}
+
+// Set up file watchers
+function initializeFileWatchers() {
+  for (const [eventType, filePath] of Object.entries(watchedFiles)) {
+    try {
+      fs.watchFile(filePath, { interval: 1000 }, (curr, prev) => {
+        // Check if file was actually modified (not just accessed)
+        if (curr.mtime !== prev.mtime) {
+          broadcastFileChange(eventType as keyof typeof watchedFiles);
+        }
+      });
+      console.log(`👀 Watching file: ${filePath} for ${eventType} changes`);
+    } catch (error) {
+      console.warn(`Failed to watch file ${filePath}:`, error);
+    }
+  }
+}
+
 const sanitizeBase = (s: string) => {
   return s
     .trim()
@@ -775,6 +833,37 @@ app.get("/api/presence/debug", (_req, res) => {
       name, lastAliveIso: new Date(ts).toISOString(), ageSec: Math.round((now - ts) / 1000),
     })),
     now: new Date().toISOString(),
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Server-Sent Events for file changes
+// ---------------------------------------------------------------------------
+app.get("/api/events", (req, res) => {
+  // Set up SSE headers
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Cache-Control",
+  });
+
+  // Add client to active connections
+  sseClients.add(res);
+  console.log(`📡 SSE client connected. Total: ${sseClients.size}`);
+
+  // Send initial connection confirmation
+  res.write(`data: ${JSON.stringify({ type: "connected", timestamp: Date.now() })}\n\n`);
+
+  // Handle client disconnect
+  req.on("close", () => {
+    sseClients.delete(res);
+    console.log(`📡 SSE client disconnected. Total: ${sseClients.size}`);
+  });
+
+  req.on("error", () => {
+    sseClients.delete(res);
   });
 });
 
@@ -1549,6 +1638,7 @@ function initializeJsonFiles() {
 
 // Initialize files before starting server
 initializeJsonFiles();
+initializeFileWatchers();
 
 app.listen(PORT, HOST, () => {
   console.log(`🚀 FjosetInfo server running on http://${HOST}:${PORT}`);

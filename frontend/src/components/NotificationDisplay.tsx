@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Theme } from "../types";
+import { useFileChangeEvents } from "../hooks/useFileChangeEvents";
 
 interface Notification {
   id: string;
@@ -12,35 +13,28 @@ interface NotificationDisplayProps {
 
 export default function NotificationDisplay({ theme }: NotificationDisplayProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const fetchNotifications = async () => {
+    try {
+      // Get today's date in DD-MM format
+      const today = new Date();
+      const todayDM =
+        String(today.getDate()).padStart(2, "0") +
+        "-" +
+        String(today.getMonth() + 1).padStart(2, "0");
+
+      const response = await fetch(`/api/notifications/date/${todayDM}`);
+      if (response.ok) {
+        const data = await response.json();
+        setNotifications(data.notifications || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+    }
+  };
 
   useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        // Get today's date in DD-MM format
-        const today = new Date();
-        const todayDM =
-          String(today.getDate()).padStart(2, "0") +
-          "-" +
-          String(today.getMonth() + 1).padStart(2, "0");
-
-        const response = await fetch(`/api/notifications/date/${todayDM}`);
-        if (response.ok) {
-          const data = await response.json();
-          setNotifications(data.notifications || []);
-          setCurrentIndex(0); // Reset to first notification
-        }
-      } catch (error) {
-        console.error("Failed to fetch notifications:", error);
-      }
-    };
-
     fetchNotifications();
-
-    // Poll for notification changes every 60 seconds to sync across devices
-    const pollInterval = setInterval(() => {
-      fetchNotifications();
-    }, 60000);
 
     // Refresh notifications at midnight
     const now = new Date();
@@ -54,21 +48,17 @@ export default function NotificationDisplay({ theme }: NotificationDisplayProps)
     }, timeUntilMidnight);
 
     return () => {
-      clearInterval(pollInterval);
       clearTimeout(midnightTimer);
     };
   }, []);
 
-  // Auto-rotate notifications if there are multiple
-  useEffect(() => {
-    if (notifications.length <= 1) return;
-
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % notifications.length);
-    }, 5000); // Change every 5 seconds
-
-    return () => clearInterval(interval);
-  }, [notifications.length]);
+  // Use file change events instead of polling
+  useFileChangeEvents({
+    onNotificationsChange: () => {
+      console.log('🔄 Notifications file changed, reloading...');
+      fetchNotifications();
+    }
+  });
 
   const visibleNotifications = notifications;
 
@@ -106,109 +96,45 @@ export default function NotificationDisplay({ theme }: NotificationDisplayProps)
     );
   }
 
-  // Multiple notifications - display as carousel
+  // Multiple notifications - display as continuous scrolling carousel
   return (
     <div style={{ margin: "0 20px 20px 20px" }}>
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "12px",
+          background: "linear-gradient(135deg, #15008e, #5a7bff)",
+          borderRadius: "12px",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
           overflow: "hidden",
+          minHeight: "80px",
+          position: "relative",
         }}
       >
-        {/* Previous button */}
-        <button
-          onClick={() => setCurrentIndex((prev) => (prev - 1 + notifications.length) % notifications.length)}
-          style={{
-            background: "rgba(255, 255, 255, 0.2)",
-            border: "none",
-            borderRadius: "50%",
-            width: "40px",
-            height: "40px",
-            color: "#fff",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: "18px",
-            flexShrink: 0,
-          }}
-          aria-label="Previous notification"
-        >
-          ‹
-        </button>
-
-        {/* Current notification */}
         <div
           style={{
-            background: "linear-gradient(135deg, #15008e, #5a7bff)",
-            color: "#aeaeae",
-            padding: "10px 20px",
-            borderRadius: "12px",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-            fontSize: "2.2em",
-            fontWeight: 600,
-            textAlign: "center",
-            minHeight: "80px",
-            flex: 1,
-            transition: "all 0.3s ease",
+            animation: "scroll-left 20s linear infinite",
+            whiteSpace: "nowrap",
           }}
         >
-          📢 {notifications[currentIndex].text} 📢
+          {/* Duplicate notifications for seamless loop */}
+          {[...notifications, ...notifications].map((notification, index) => (
+            <div
+              key={`${notification.id}-${index}`}
+              style={{
+                color: "#aeaeae",
+                padding: "10px 40px",
+                fontSize: "2.2em",
+                fontWeight: 600,
+                display: "inline-flex",
+                alignItems: "center",
+                flexShrink: 0,
+              }}
+            >
+              📢 {notification.text} 📢
+            </div>
+          ))}
         </div>
-
-        {/* Next button */}
-        <button
-          onClick={() => setCurrentIndex((prev) => (prev + 1) % notifications.length)}
-          style={{
-            background: "rgba(255, 255, 255, 0.2)",
-            border: "none",
-            borderRadius: "50%",
-            width: "40px",
-            height: "40px",
-            color: "#fff",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: "18px",
-            flexShrink: 0,
-          }}
-          aria-label="Next notification"
-        >
-          ›
-        </button>
-      </div>
-
-      {/* Indicators */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          gap: "8px",
-          marginTop: "12px",
-        }}
-      >
-        {notifications.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => setCurrentIndex(index)}
-            style={{
-              width: "8px",
-              height: "8px",
-              borderRadius: "50%",
-              border: "none",
-              background: index === currentIndex ? "#5a7bff" : "rgba(255, 255, 255, 0.3)",
-              cursor: "pointer",
-              transition: "background 0.3s ease",
-            }}
-            aria-label={`Go to notification ${index + 1}`}
-          />
-        ))}
       </div>
     </div>
   );

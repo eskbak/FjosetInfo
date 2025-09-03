@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { AppSettings } from '../hooks/useSettings';
+import { useFileChangeEvents } from '../hooks/useFileChangeEvents';
 
 const DEFAULT_SETTINGS: AppSettings = {
   viewsEnabled: { dashboard: true, news: true, calendar: true },
@@ -82,14 +83,15 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     fetchSettings();
-    
-    // Poll for settings changes every 30 seconds to sync across devices
-    const pollInterval = setInterval(() => {
-      fetchSettings();
-    }, 30000);
-    
-    return () => clearInterval(pollInterval);
   }, [fetchSettings]);
+
+  // Use file change events instead of polling
+  useFileChangeEvents({
+    onSettingsChange: () => {
+      console.log('🔄 Settings file changed, reloading...');
+      fetchSettings();
+    }
+  });
 
   return (
     <SettingsContext.Provider value={{ 
