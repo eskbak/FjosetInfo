@@ -5,9 +5,9 @@
     "calendar": true
   },
   "dayHours": {
-    "start": 6,
+    "start": 0,
     "end": 18
   },
   "calendarDaysAhead": 5,
-  "rotateSeconds": 30
+  "rotateSeconds": 5
 }

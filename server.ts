@@ -2,6 +2,7 @@
 import "dotenv/config";
 import express, { Request, Response } from "express";
 import cors from "cors";
+import multer from "multer";
 import type { Request as ExpressRequest, Response as ExpressResponse } from "express";
 import fs from "fs";
 import { exec, execSync } from "child_process";
@@ -80,10 +81,20 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(cors());
+
+// Enhanced CORS configuration for Pi deployment
+app.use(cors({
+  origin: true, // Allow all origins for local network access
+  credentials: true,
+}));
+
 app.use(express.json({ limit: "1mb" }));
 
+// Enable trust proxy for proper IP detection
+app.set('trust proxy', true);
+
 const PORT = Number(process.env.PORT || 8787);
+const HOST = process.env.HOST || '0.0.0.0'; // Listen on all interfaces for Pi deployment
 const ET_CLIENT_NAME = process.env.ET_CLIENT_NAME || "pi-infoscreen/0.1 (example@example.com)";
 const MET_USER_AGENT = process.env.MET_USER_AGENT || "pi-infoscreen/0.1 (example@example.com)";
 const NRK_RSS_URL = process.env.NRK_RSS_URL || "https://www.nrk.no/nyheter/siste.rss";
@@ -113,6 +124,64 @@ const OVERLAYS_FILE = process.env.OVERLAYS_FILE
 const SETTINGS_FILE = process.env.SETTINGS_FILE
   ? path.resolve(process.cwd(), process.env.SETTINGS_FILE)
   : path.join(__dirname, "settings.json");
+
+const BIRTHDAYS_FILE = process.env.BIRTHDAYS_FILE
+  ? path.resolve(process.cwd(), process.env.BIRTHDAYS_FILE)
+  : path.join(__dirname, "birthdays.json");
+
+const KNOWN_DEVICES_FILE = process.env.KNOWN_DEVICES_FILE
+  ? path.resolve(process.cwd(), process.env.KNOWN_DEVICES_FILE)
+  : path.join(__dirname, "known-devices.json");
+
+const NOTIFICATIONS_FILE = process.env.NOTIFICATIONS_FILE
+  ? path.resolve(process.cwd(), process.env.NOTIFICATIONS_FILE)
+  : path.join(__dirname, "notifications.json");
+
+const sanitizeBase = (s: string) => {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-_]/g, "");
+}
+
+// Multer configuration for avatar uploads
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const avatarDir = path.join(__dirname, "avatars");
+    if (!fs.existsSync(avatarDir)) {
+      fs.mkdirSync(avatarDir, { recursive: true });
+    }
+    cb(null, avatarDir);
+  },
+  filename: (req, file, cb) => {
+    const avatarDir = path.join(__dirname, "avatars");
+
+    const rawName = 
+      (typeof req.body?.name === "string" && req.body.name) ||
+      (typeof req.query?.name === "string" && req.query.name) ||
+      "unknown";
+
+    const base = sanitizeBase(rawName) || "unknown";
+    let filename = `${base}.png`;
+
+    cb(null, filename);
+  }
+});
+
+const avatarUpload = multer({
+  storage: avatarStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'image/png' || file.originalname.toLowerCase().endsWith('.png')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PNG files are allowed'));
+    }
+  }
+});
 
 const DEFAULT_SETTINGS = {
   viewsEnabled: { dashboard: true, news: true, calendar: true },
@@ -158,8 +227,15 @@ function normDevice(d: { name: string; macs?: string[]; ips?: string[] }): Known
   };
 }
 
-// Parse KNOWN_DEVICES from .env as proper JSON
-const KNOWN_DEVICES: KnownDevice[] = (() => {
+// Parse KNOWN_DEVICES from JSON file or .env as fallback
+function loadKnownDevices(): KnownDevice[] {
+  // Try loading from JSON file first
+  const jsonDevices = readJsonSafe<KnownDevice[]>(KNOWN_DEVICES_FILE, []);
+  if (jsonDevices.length > 0) {
+    return jsonDevices.map(normDevice);
+  }
+  
+  // Fallback to environment variable for backward compatibility
   try {
     const raw = process.env.KNOWN_DEVICES || "[]";
     const arr = JSON.parse(raw);
@@ -167,7 +243,9 @@ const KNOWN_DEVICES: KnownDevice[] = (() => {
   } catch {
     return [];
   }
-})();
+}
+
+let KNOWN_DEVICES = loadKnownDevices();
 
 // ---------------------------------------------------------------------------
 // Entur departures (no line filter)
@@ -205,6 +283,7 @@ app.get("/api/entur/departures", async (req: Request, res: Response) => {
         "ET-Client-Name": ET_CLIENT_NAME,
       },
       body: JSON.stringify({ query, variables: { id: stopPlaceId, max } }),
+      signal: AbortSignal.timeout(10000), // 10 second timeout
     });
 
     if (!r.ok) {
@@ -269,7 +348,10 @@ app.get("/api/yr/today", async (req: Request, res: Response) => {
     const hoursWanted = Math.min(Math.max(Number(req.query.hours || 5), 1), 12); // 1..12
 
     const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`;
-    const r = await fetch(url, { headers: { "User-Agent": MET_USER_AGENT } });
+    const r = await fetch(url, { 
+      headers: { "User-Agent": MET_USER_AGENT },
+      signal: AbortSignal.timeout(10000), // 10 second timeout
+    });
     if (!r.ok) {
       const text = await r.text();
       return res.status(r.status).send(text);
@@ -378,6 +460,7 @@ app.get("/api/nrk/latest", async (req: Request, res: Response) => {
     const feedUrl = String(req.query.url || NRK_RSS_URL);
     const r = await fetch(feedUrl, {
       headers: { Accept: "application/rss+xml, application/xml;q=0.9, */*;q=0.8" },
+      signal: AbortSignal.timeout(10000), // 10 second timeout
     });
     if (!r.ok) {
       const text = await r.text();
@@ -890,23 +973,31 @@ app.post("/api/tts/play", async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Birthday helpers
+// ---------------------------------------------------------------------------
+function loadBirthdays(): Array<{ name: string; date: string }> {
+  // Try loading from JSON file first
+  const jsonBirthdays = readJsonSafe<Array<{ name: string; date: string }>>(BIRTHDAYS_FILE, []);
+  if (jsonBirthdays.length > 0) {
+    return jsonBirthdays.filter(b => b && typeof b.name === "string" && typeof b.date === "string");
+  }
+  
+  // Fallback to environment variable for backward compatibility
+  try {
+    const birthdayListEnv = process.env.BIRTHDAY_LIST || "[]";
+    const birthdayList = JSON.parse(birthdayListEnv);
+    return Array.isArray(birthdayList) ? birthdayList.filter(b => b && typeof b.name === "string" && typeof b.date === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Birthday API
 // ---------------------------------------------------------------------------
 app.get("/api/birthdays/today", (_req, res) => {
   try {
-    const birthdayListEnv = process.env.BIRTHDAY_LIST || "[]";
-    let birthdayList: Array<{ name: string; date: string }> = [];
-    
-    try {
-      birthdayList = JSON.parse(birthdayListEnv);
-    } catch (e) {
-      console.error("Failed to parse BIRTHDAY_LIST:", e);
-      return res.status(500).json({ error: "Invalid birthday list format" });
-    }
-
-    if (!Array.isArray(birthdayList)) {
-      return res.status(500).json({ error: "Birthday list must be an array" });
-    }
+    const birthdayList = loadBirthdays();
 
     // Get today's date in MM-DD format
     const today = new Date();
@@ -914,12 +1005,7 @@ app.get("/api/birthdays/today", (_req, res) => {
 
     // Find birthdays matching today
     const todaysBirthdays = birthdayList
-      .filter(birthday => {
-        if (!birthday || typeof birthday.name !== "string" || typeof birthday.date !== "string") {
-          return false;
-        }
-        return birthday.date === todayMD;
-      })
+      .filter(birthday => birthday.date === todayMD)
       .map(birthday => ({ name: birthday.name.trim() }))
       .filter(birthday => birthday.name.length > 0);
 
@@ -930,6 +1016,305 @@ app.get("/api/birthdays/today", (_req, res) => {
     });
   } catch (e: any) {
     res.status(500).json({ error: e?.message || "Birthday service error" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Admin API
+// ---------------------------------------------------------------------------
+app.post("/api/admin/auth", (req, res) => {
+  try {
+    const { password } = req.body;
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    
+    if (!adminPassword) {
+      return res.status(503).json({ ok: false, error: "Admin password not configured" });
+    }
+    
+    if (password === adminPassword) {
+      res.json({ ok: true });
+    } else {
+      res.status(401).json({ ok: false, error: "Invalid password" });
+    }
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e?.message || "Authentication error" });
+  }
+});
+
+// Get all birthdays for admin management
+app.get("/api/admin/birthdays", (_req, res) => {
+  try {
+    const birthdayList = loadBirthdays();
+    res.json({ birthdays: birthdayList });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Birthday service error" });
+  }
+});
+
+// Add birthday
+app.post("/api/admin/birthdays", (req, res) => {
+  try {
+    const { name, date } = req.body;
+    
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Invalid name" });
+    }
+    
+    if (!date || typeof date !== "string" || !date.match(/^\d{2}-\d{2}$/)) {
+      return res.status(400).json({ error: "Invalid date format. Use MM-DD" });
+    }
+    
+    const birthdayList = loadBirthdays();
+    const newBirthday = { name: name.trim(), date };
+    
+    // Check for duplicates
+    const exists = birthdayList.some(b => b.name === newBirthday.name && b.date === newBirthday.date);
+    if (exists) {
+      return res.status(400).json({ error: "Birthday already exists" });
+    }
+    
+    birthdayList.push(newBirthday);
+    writeJsonAtomic(BIRTHDAYS_FILE, birthdayList);
+    
+    res.json({ ok: true, birthdays: birthdayList });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Failed to add birthday" });
+  }
+});
+
+// Remove birthday
+app.delete("/api/admin/birthdays", (req, res) => {
+  try {
+    const { name, date } = req.body;
+    
+    if (!name || !date) {
+      return res.status(400).json({ error: "Name and date required" });
+    }
+    
+    const birthdayList = loadBirthdays();
+    const filtered = birthdayList.filter(b => !(b.name === name && b.date === date));
+    
+    if (filtered.length === birthdayList.length) {
+      return res.status(404).json({ error: "Birthday not found" });
+    }
+    
+    writeJsonAtomic(BIRTHDAYS_FILE, filtered);
+    
+    res.json({ ok: true, birthdays: filtered });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Failed to remove birthday" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Known Devices API
+// ---------------------------------------------------------------------------
+
+// Get all known devices for admin management
+app.get("/api/admin/devices", (_req, res) => {
+  try {
+    res.json({ devices: KNOWN_DEVICES });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Device service error" });
+  }
+});
+
+// Add known device
+app.post("/api/admin/devices", (req, res) => {
+  try {
+    const { name, macs, ips } = req.body;
+    
+    if (!name || typeof name !== "string" || !name.trim()) {
+      return res.status(400).json({ error: "Invalid name" });
+    }
+    
+    const newDevice = normDevice({
+      name: name.trim(),
+      macs: Array.isArray(macs) ? macs : [],
+      ips: Array.isArray(ips) ? ips : []
+    });
+    
+    // Check for duplicate names
+    const exists = KNOWN_DEVICES.some(d => d.name === newDevice.name);
+    if (exists) {
+      return res.status(400).json({ error: "Device name already exists" });
+    }
+    
+    KNOWN_DEVICES.push(newDevice);
+    writeJsonAtomic(KNOWN_DEVICES_FILE, KNOWN_DEVICES);
+    
+    // Reload KNOWN_DEVICES to ensure consistency
+    KNOWN_DEVICES = loadKnownDevices();
+    
+    res.json({ ok: true, devices: KNOWN_DEVICES });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Failed to add device" });
+  }
+});
+
+// Remove known device
+app.delete("/api/admin/devices", (req, res) => {
+  try {
+    const { name } = req.body;
+    
+    if (!name || typeof name !== "string") {
+      return res.status(400).json({ error: "Device name required" });
+    }
+    
+    const initialLength = KNOWN_DEVICES.length;
+    KNOWN_DEVICES.splice(0, KNOWN_DEVICES.length, ...KNOWN_DEVICES.filter(d => d.name !== name));
+    
+    if (KNOWN_DEVICES.length === initialLength) {
+      return res.status(404).json({ error: "Device not found" });
+    }
+    
+    writeJsonAtomic(KNOWN_DEVICES_FILE, KNOWN_DEVICES);
+    
+    // Reload KNOWN_DEVICES to ensure consistency
+    KNOWN_DEVICES = loadKnownDevices();
+    
+    res.json({ ok: true, devices: KNOWN_DEVICES });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Failed to remove device" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Notifications API
+// ---------------------------------------------------------------------------
+
+// Get all notifications
+app.get("/api/admin/notifications", (_req, res) => {
+  try {
+    const notifications = readJsonSafe<Array<{ id: string; text: string; dates: string[] }>>(NOTIFICATIONS_FILE, []);
+    res.json({ notifications });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Notification service error" });
+  }
+});
+
+// Add notification
+app.post("/api/admin/notifications", (req, res) => {
+  try {
+    const { text, dates } = req.body;
+    
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return res.status(400).json({ error: "Invalid notification text" });
+    }
+    
+    if (!Array.isArray(dates) || dates.length === 0) {
+      return res.status(400).json({ error: "At least one date is required" });
+    }
+    
+    // Validate dates
+    const validDates = dates.filter(d => typeof d === "string" && d.match(/^\d{2}-\d{2}$/));
+    if (validDates.length === 0) {
+      return res.status(400).json({ error: "At least one valid date (MM-DD format) is required" });
+    }
+    
+    const notifications = readJsonSafe<Array<{ id: string; text: string; dates: string[] }>>(NOTIFICATIONS_FILE, []);
+    
+    const newNotification = {
+      id: Date.now().toString(),
+      text: text.trim().slice(0, 200), // Enforce 200 char limit
+      dates: validDates
+    };
+    
+    notifications.push(newNotification);
+    writeJsonAtomic(NOTIFICATIONS_FILE, notifications);
+    
+    res.json({ ok: true, notifications });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Failed to add notification" });
+  }
+});
+
+// Remove notification
+app.delete("/api/admin/notifications", (req, res) => {
+  try {
+    const { id } = req.body;
+    
+    if (!id || typeof id !== "string") {
+      return res.status(400).json({ error: "Notification ID required" });
+    }
+    
+    const notifications = readJsonSafe<Array<{ id: string; text: string; dates: string[] }>>(NOTIFICATIONS_FILE, []);
+    const filtered = notifications.filter(n => n.id !== id);
+    
+    if (filtered.length === notifications.length) {
+      return res.status(404).json({ error: "Notification not found" });
+    }
+    
+    writeJsonAtomic(NOTIFICATIONS_FILE, filtered);
+    
+    res.json({ ok: true, notifications: filtered });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Failed to remove notification" });
+  }
+});
+
+// Get notifications for a specific date (for main app)
+app.get("/api/notifications/date/:date", (req, res) => {
+  try {
+    const { date } = req.params;
+    
+    if (!date.match(/^\d{2}-\d{2}$/)) {
+      return res.status(400).json({ error: "Invalid date format. Use MM-DD" });
+    }
+    
+    const notifications = readJsonSafe<Array<{ id: string; text: string; dates: string[] }>>(NOTIFICATIONS_FILE, []);
+    const dateNotifications = notifications.filter(n => n.dates.includes(date));
+    
+    res.setHeader("Cache-Control", "public, max-age=300"); // Cache for 5 minutes
+    res.json({
+      date,
+      notifications: dateNotifications.map(n => ({ id: n.id, text: n.text }))
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Notification service error" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Avatar serving
+// ---------------------------------------------------------------------------
+app.get("/avatars/:filename", (req, res) => {
+  const filename = req.params.filename;
+  const avatarPath = path.join(__dirname, "avatars", filename);
+  
+  // Security check - only allow .png files and no path traversal
+  if (!filename.endsWith('.png') || filename.includes('..') || filename.includes('/')) {
+    return res.status(400).json({ error: "Invalid filename" });
+  }
+  
+  // Check if file exists
+  if (!fs.existsSync(avatarPath)) {
+    return res.status(404).json({ error: "Avatar not found" });
+  }
+  
+  res.setHeader("Cache-Control", "public, max-age=86400"); // Cache for 1 day
+  res.sendFile(avatarPath);
+});
+
+// Upload avatar for device
+app.post("/api/admin/upload-avatar", avatarUpload.single('avatar'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No avatar file provided" });
+    }
+    
+    const name = req.body.name;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: "Device name is required" });
+    }
+    
+    res.json({ 
+      ok: true, 
+      message: "Avatar uploaded successfully",
+      filename: req.file.filename 
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error?.message || "Upload failed" });
   }
 });
 
@@ -993,6 +1378,55 @@ app.put("/api/settings", (req, res) => {
   } catch (e: any) {
     res.status(400).json({ ok: false, error: e?.message || "Invalid settings" });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Health check endpoint for Pi deployment debugging
+// ---------------------------------------------------------------------------
+app.get("/api/health", (_req, res) => {
+  const os = require('os');
+  const health = {
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    server: {
+      platform: os.platform(),
+      arch: os.arch(),
+      nodeVersion: process.version,
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+    },
+    files: {
+      settings: fs.existsSync(SETTINGS_FILE),
+      birthdays: fs.existsSync(BIRTHDAYS_FILE),
+      knownDevices: fs.existsSync(KNOWN_DEVICES_FILE),
+      notifications: fs.existsSync(NOTIFICATIONS_FILE),
+      overlays: fs.existsSync(OVERLAYS_FILE),
+      avatarsDir: fs.existsSync(path.join(__dirname, "avatars")),
+    },
+    network: {
+      interfaces: (() => {
+        const interfaces = os.networkInterfaces();
+        const result: Record<string, string[]> = {};
+        for (const [name, addrs] of Object.entries(interfaces)) {
+          if (addrs) {
+            result[name] = addrs
+              .filter(addr => addr.family === 'IPv4')
+              .map(addr => addr.address);
+          }
+        }
+        return result;
+      })(),
+    },
+    config: {
+      port: PORT,
+      host: HOST,
+      adminPasswordConfigured: !!process.env.ADMIN_PASSWORD,
+      presenceMode: PRESENCE_MODE,
+      knownDevicesCount: KNOWN_DEVICES.length,
+    }
+  };
+  
+  res.json(health);
 });
 
 // ---------------------------------------------------------------------------
@@ -1085,8 +1519,59 @@ app.get(/^\/(?!api\/).*/, (_req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Start server
+// Start server with enhanced Pi deployment support
 // ---------------------------------------------------------------------------
-app.listen(PORT, () => {
-  console.log(`Proxy listening on http://localhost:${PORT}`);
+
+// Ensure all required JSON files exist with defaults
+function initializeJsonFiles() {
+  const files = [
+    { path: SETTINGS_FILE, content: DEFAULT_SETTINGS },
+    { path: BIRTHDAYS_FILE, content: [] },
+    { path: KNOWN_DEVICES_FILE, content: [] },
+    { path: NOTIFICATIONS_FILE, content: [] },
+    { path: OVERLAYS_FILE, content: { overlays: [] } },
+  ];
+
+  for (const file of files) {
+    if (!fs.existsSync(file.path)) {
+      console.log(`🔧 Creating missing file: ${file.path}`);
+      writeJsonAtomic(file.path, file.content);
+    }
+  }
+
+  // Ensure avatars directory exists
+  const avatarDir = path.join(__dirname, "avatars");
+  if (!fs.existsSync(avatarDir)) {
+    console.log(`📁 Creating avatars directory: ${avatarDir}`);
+    fs.mkdirSync(avatarDir, { recursive: true });
+  }
+}
+
+// Initialize files before starting server
+initializeJsonFiles();
+
+app.listen(PORT, HOST, () => {
+  console.log(`🚀 FjosetInfo server running on http://${HOST}:${PORT}`);
+  console.log(`📱 Access from other devices: http://YOUR_PI_IP:${PORT}`);
+  console.log(`⚙️  Admin panel: http://YOUR_PI_IP:${PORT}/#admin`);
+  
+  // Log network interfaces to help with Pi deployment
+  const os = require('os');
+  const interfaces = os.networkInterfaces();
+  const ips = [];
+  
+  for (const [name, addrs] of Object.entries(interfaces)) {
+    if (addrs) {
+      for (const addr of addrs) {
+        if (addr.family === 'IPv4' && !addr.internal) {
+          ips.push(`${name}: ${addr.address}`);
+        }
+      }
+    }
+  }
+  
+  if (ips.length > 0) {
+    console.log(`🌐 Available on network interfaces:`);
+    ips.forEach(ip => console.log(`   ${ip}`));
+  }
 });

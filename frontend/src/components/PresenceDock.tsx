@@ -1,27 +1,9 @@
 // components/PresenceDock.tsx
 import { useEffect, useMemo, useState } from "react";
+import { useKnownDevices } from "../hooks/useKnownDevices";
 
-// --- IMPORT YOUR PNGs HERE ---
-import eskilPng from "../assets/avatars/eskil.png?url";
-import sindrePng from "../assets/avatars/sindre.png?url";
-// import hallgrimPng from "../assets/avatars/hallgrim.png?url";
-import kristianPng from "../assets/avatars/kristian.png?url";
-import niklasPng from "../assets/avatars/niklas.png?url";
-// import mariusPng from "../assets/avatars/marius.png?url";
+// Fallback avatar import
 import fallbackPng from "../assets/avatars/fallback.png?url";
-import hallgrimPng from "../assets/avatars/hallgrim.png?url";
-import minaPng from "../assets/avatars/mina.png?url";
-
-// Map KNOWN_DEVICES "name" -> image
-const AVATARS: Record<string, string> = {
-  Eskil: eskilPng,
-  Sindre: sindrePng,
-  Hallgrim: hallgrimPng,
-  Skurken: kristianPng,
-  Niklas: niklasPng,
-  Marius: eskilPng,
-  Mina: minaPng
-};
 
 type Props = {
   zIndex?: number;     // default 1800 (below ArrivalOverlay)
@@ -38,6 +20,17 @@ export default function PresenceDock({
 }: Props) {
   const [present, setPresent] = useState<string[]>([]);
   const [size, setSize] = useState<number>(minSizePx);
+  const { devices, loading: devicesLoading } = useKnownDevices();
+
+  // Build avatars map from known devices and server-side avatars
+  const avatarsMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    devices.forEach(device => {
+      // Try to use server-side avatar first
+      map[device.name] = `/avatars/${device.name}.png`;
+    });
+    return map;
+  }, [devices]);
 
   // poll presence
   useEffect(() => {
@@ -49,9 +42,13 @@ export default function PresenceDock({
         const j = await r.json();
         if (!alive) return;
         const list = Array.isArray(j.present) ? (j.present as string[]) : [];
-        // Household order keeps positions stable
-        const ORDER = ["Hallgrim", "Eskil", "Sindre", "Skurken", "Niklas", "Marius"];
-        list.sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+        
+        // Order based on known devices if available
+        if (devices.length > 0) {
+          const deviceOrder = devices.map(d => d.name);
+          list.sort((a, b) => deviceOrder.indexOf(a) - deviceOrder.indexOf(b));
+        }
+        
         setPresent(list);
       } catch {
         /* ignore */
@@ -61,7 +58,7 @@ export default function PresenceDock({
     load();
     const id = setInterval(load, 10_000);
     return () => { alive = false; clearInterval(id); };
-  }, []);
+  }, [devices]);
 
   // compute avatar size so n avatars use (almost) full width
   const recomputeSize = () => {
@@ -118,9 +115,9 @@ const avatarStyle: React.CSSProperties = {
     () =>
       present.map((name) => ({
         name,
-        src: AVATARS[name] || fallbackPng,
+        src: avatarsMap[name] || fallbackPng,
       })),
-    [present]
+    [present, avatarsMap]
   );
 
   return (
