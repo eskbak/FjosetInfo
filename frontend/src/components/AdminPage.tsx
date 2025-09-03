@@ -57,6 +57,12 @@ export default function AdminPage() {
   // Notification state
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [newNotification, setNewNotification] = useState({ text: "", dates: "" });
+  
+  // Edit state for modals
+  const [editingBirthday, setEditingBirthday] = useState<Birthday | null>(null);
+  const [editingDevice, setEditingDevice] = useState<KnownDevice | null>(null);
+  const [editingNotification, setEditingNotification] = useState<Notification | null>(null);
+  const [editForm, setEditForm] = useState<any>({});
 
   // Theme (replicating main app theming)
   const localHour = new Date().getHours();
@@ -334,6 +340,172 @@ export default function AdminPage() {
       }
     } catch (error) {
       alert("Network error while removing notification");
+    }
+  };
+
+  // Edit functions
+  const startEditBirthday = (birthday: Birthday) => {
+    setEditingBirthday(birthday);
+    setEditForm({ name: birthday.name, date: birthday.date });
+  };
+
+  const updateBirthday = async () => {
+    if (!editingBirthday || !editForm.name?.trim() || !editForm.date?.match(/^\d{2}-\d{2}$/)) {
+      alert("Please enter a valid name and date (DD-MM format)");
+      return;
+    }
+
+    try {
+      // Remove old birthday
+      await fetch("/api/admin/birthdays", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editingBirthday.name,
+          date: editingBirthday.date
+        }),
+      });
+
+      // Add updated birthday
+      const response = await fetch("/api/admin/birthdays", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editForm.name.trim(),
+          date: editForm.date
+        }),
+      });
+
+      const result = await response.json();
+      if (result.ok) {
+        setBirthdays(result.birthdays);
+        setEditingBirthday(null);
+        setEditForm({});
+      } else {
+        alert(result.error || "Failed to update birthday");
+      }
+    } catch (error) {
+      alert("Network error while updating birthday");
+    }
+  };
+
+  const startEditDevice = (device: KnownDevice) => {
+    setEditingDevice(device);
+    setEditForm({ 
+      name: device.name, 
+      macs: device.macs.join(", "), 
+      ips: device.ips.join(", "),
+      avatar: null
+    });
+  };
+
+  const updateDevice = async () => {
+    if (!editingDevice || !editForm.name?.trim()) {
+      alert("Please enter a device name");
+      return;
+    }
+
+    const macs = editForm.macs.split(",").map((m: string) => m.trim()).filter(Boolean);
+    const ips = editForm.ips.split(",").map((ip: string) => ip.trim()).filter(Boolean);
+
+    try {
+      // Upload new avatar if provided
+      if (editForm.avatar) {
+        const formData = new FormData();
+        formData.append('name', editForm.name.trim());
+        formData.append('avatar', editForm.avatar);
+
+        const uploadResponse = await fetch("/api/admin/upload-avatar", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          const uploadResult = await uploadResponse.json();
+          alert(uploadResult.error || "Failed to upload avatar");
+          return;
+        }
+      }
+
+      // Remove old device
+      await fetch("/api/admin/devices", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: editingDevice.name }),
+      });
+
+      // Add updated device
+      const response = await fetch("/api/admin/devices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editForm.name.trim(),
+          macs,
+          ips
+        }),
+      });
+
+      const result = await response.json();
+      if (result.ok) {
+        setKnownDevices(result.devices);
+        setEditingDevice(null);
+        setEditForm({});
+      } else {
+        alert(result.error || "Failed to update device");
+      }
+    } catch (error) {
+      alert("Network error while updating device");
+    }
+  };
+
+  const startEditNotification = (notification: Notification) => {
+    setEditingNotification(notification);
+    setEditForm({ 
+      text: notification.text, 
+      dates: notification.dates.join(", ")
+    });
+  };
+
+  const updateNotification = async () => {
+    if (!editingNotification || !editForm.text?.trim()) {
+      alert("Please enter notification text");
+      return;
+    }
+
+    const dates = editForm.dates.split(",").map((d: string) => d.trim()).filter((d: string) => d.match(/^\d{2}-\d{2}$/));
+    if (dates.length === 0) {
+      alert("Please enter valid dates in DD-MM format, separated by commas");
+      return;
+    }
+
+    try {
+      // Remove old notification
+      await fetch("/api/admin/notifications", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingNotification.id }),
+      });
+
+      // Add updated notification
+      const response = await fetch("/api/admin/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: editForm.text.trim(),
+          dates
+        }),
+      });
+
+      const result = await response.json();
+      if (result.ok) {
+        setNotifications(result.notifications);
+        setEditingNotification(null);
+        setEditForm({});
+      } else {
+        alert(result.error || "Failed to update notification");
+      }
+    } catch (error) {
+      alert("Network error while updating notification");
     }
   };
 
@@ -747,20 +919,36 @@ export default function AdminPage() {
                       }}
                     >
                       <span>{birthday.name} - {birthday.date}</span>
-                      <button
-                        onClick={() => removeBirthday(birthday)}
-                        style={{
-                          padding: "4px 8px",
-                          background: "#ef4444",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontSize: "12px"
-                        }}
-                      >
-                        Remove
-                      </button>
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <button
+                          onClick={() => startEditBirthday(birthday)}
+                          style={{
+                            padding: "4px 8px",
+                            background: "#3b82f6",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "12px"
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => removeBirthday(birthday)}
+                          style={{
+                            padding: "4px 8px",
+                            background: "#ef4444",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "12px"
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -910,20 +1098,36 @@ export default function AdminPage() {
                             </p>
                           )}
                         </div>
-                        <button
-                          onClick={() => removeDevice(device.name)}
-                          style={{
-                            padding: "4px 8px",
-                            background: "#ef4444",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "12px"
-                          }}
-                        >
-                          Remove
-                        </button>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button
+                            onClick={() => startEditDevice(device)}
+                            style={{
+                              padding: "4px 8px",
+                              background: "#3b82f6",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "12px"
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => removeDevice(device.name)}
+                            style={{
+                              padding: "4px 8px",
+                              background: "#ef4444",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "12px"
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1025,20 +1229,36 @@ export default function AdminPage() {
                             Dates: {notification.dates.join(", ")}
                           </p>
                         </div>
-                        <button
-                          onClick={() => removeNotification(notification.id)}
-                          style={{
-                            padding: "4px 8px",
-                            background: "#ef4444",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "12px"
-                          }}
-                        >
-                          Remove
-                        </button>
+                        <div style={{ display: "flex", gap: "8px" }}>
+                          <button
+                            onClick={() => startEditNotification(notification)}
+                            style={{
+                              padding: "4px 8px",
+                              background: "#3b82f6",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "12px"
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => removeNotification(notification.id)}
+                            style={{
+                              padding: "4px 8px",
+                              background: "#ef4444",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "12px"
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1047,6 +1267,323 @@ export default function AdminPage() {
             </div>
           </div>
         </section>
+
+        {/* Edit Modals */}
+        {editingBirthday && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.7)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+            }}
+            onClick={() => setEditingBirthday(null)}
+          >
+            <div
+              style={{
+                background: theme.card,
+                padding: "24px",
+                borderRadius: "12px",
+                border: `1px solid ${theme.border}`,
+                minWidth: "400px",
+                maxWidth: "90%",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 style={{ marginBottom: "16px", fontSize: "18px" }}>Edit Birthday</h3>
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>Name</label>
+                <input
+                  type="text"
+                  value={editForm.name || ""}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  style={{
+                    width: "100%",
+                    padding: "8px",
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: "4px",
+                    background: theme.bg,
+                    color: theme.text,
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>Date (DD-MM)</label>
+                <input
+                  type="text"
+                  value={editForm.date || ""}
+                  onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                  placeholder="DD-MM"
+                  pattern="\\d{2}-\\d{2}"
+                  style={{
+                    padding: "8px",
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: "4px",
+                    background: theme.bg,
+                    color: theme.text,
+                    width: "80px"
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => setEditingBirthday(null)}
+                  style={{
+                    padding: "8px 16px",
+                    background: theme.bg,
+                    color: theme.text,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: "4px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={updateBirthday}
+                  style={{
+                    padding: "8px 16px",
+                    background: "#10b981",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editingDevice && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.7)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+            }}
+            onClick={() => setEditingDevice(null)}
+          >
+            <div
+              style={{
+                background: theme.card,
+                padding: "24px",
+                borderRadius: "12px",
+                border: `1px solid ${theme.border}`,
+                minWidth: "500px",
+                maxWidth: "90%",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 style={{ marginBottom: "16px", fontSize: "18px" }}>Edit Device</h3>
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>Device Name</label>
+                <input
+                  type="text"
+                  value={editForm.name || ""}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  style={{
+                    width: "100%",
+                    padding: "8px",
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: "4px",
+                    background: theme.bg,
+                    color: theme.text,
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>MAC Addresses (comma separated)</label>
+                <input
+                  type="text"
+                  value={editForm.macs || ""}
+                  onChange={(e) => setEditForm({ ...editForm, macs: e.target.value })}
+                  placeholder="AA:BB:CC:DD:EE:FF, 11:22:33:44:55:66"
+                  style={{
+                    width: "100%",
+                    padding: "8px",
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: "4px",
+                    background: theme.bg,
+                    color: theme.text,
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>IP Addresses (comma separated)</label>
+                <input
+                  type="text"
+                  value={editForm.ips || ""}
+                  onChange={(e) => setEditForm({ ...editForm, ips: e.target.value })}
+                  placeholder="192.168.1.100, 192.168.1.101"
+                  style={{
+                    width: "100%",
+                    padding: "8px",
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: "4px",
+                    background: theme.bg,
+                    color: theme.text,
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>New Avatar Image (.png file, optional)</label>
+                <input
+                  type="file"
+                  accept=".png,image/png"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setEditForm({ ...editForm, avatar: file });
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "8px",
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: "4px",
+                    background: theme.bg,
+                    color: theme.text,
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => setEditingDevice(null)}
+                  style={{
+                    padding: "8px 16px",
+                    background: theme.bg,
+                    color: theme.text,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: "4px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={updateDevice}
+                  style={{
+                    padding: "8px 16px",
+                    background: "#10b981",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editingNotification && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.7)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+            }}
+            onClick={() => setEditingNotification(null)}
+          >
+            <div
+              style={{
+                background: theme.card,
+                padding: "24px",
+                borderRadius: "12px",
+                border: `1px solid ${theme.border}`,
+                minWidth: "500px",
+                maxWidth: "90%",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 style={{ marginBottom: "16px", fontSize: "18px" }}>Edit Notification</h3>
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>Notification Text</label>
+                <textarea
+                  value={editForm.text || ""}
+                  onChange={(e) => setEditForm({ ...editForm, text: e.target.value })}
+                  maxLength={200}
+                  style={{
+                    width: "100%",
+                    height: "80px",
+                    padding: "8px",
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: "4px",
+                    background: theme.bg,
+                    color: theme.text,
+                    boxSizing: "border-box",
+                    resize: "vertical"
+                  }}
+                />
+              </div>
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", marginBottom: "4px", fontSize: "14px" }}>Dates (DD-MM, comma separated)</label>
+                <input
+                  type="text"
+                  value={editForm.dates || ""}
+                  onChange={(e) => setEditForm({ ...editForm, dates: e.target.value })}
+                  placeholder="25-12, 01-01, 17-05"
+                  style={{
+                    width: "100%",
+                    padding: "8px",
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: "4px",
+                    background: theme.bg,
+                    color: theme.text,
+                    boxSizing: "border-box"
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => setEditingNotification(null)}
+                  style={{
+                    padding: "8px 16px",
+                    background: theme.bg,
+                    color: theme.text,
+                    border: `1px solid ${theme.border}`,
+                    borderRadius: "4px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={updateNotification}
+                  style={{
+                    padding: "8px 16px",
+                    background: "#10b981",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer"
+                  }}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
