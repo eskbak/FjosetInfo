@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Header from "./components/Header";
-import BirthdayNotification from "./components/BirthdayNotification";
 import DashboardView from "./views/DashboardView";
 import NewsView from "./views/NewsView";
 import CalendarView from "./views/CalendarView";
@@ -248,9 +247,6 @@ export default function App() {
       <Header todayText={todayNo} />
 
       <NotificationsCard theme={theme} colors={COLORS} isDay={isDay} rotateMs={10000} />
-
-      {/* Birthday notification */}
-      <BirthdayNotification theme={theme} />
 
       <PresenceDock />
 
