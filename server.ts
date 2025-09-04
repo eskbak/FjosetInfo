@@ -70,13 +70,15 @@ type GoogleEventItem = {
   end:   { date?: string; dateTime?: string; timeZone?: string };
 };
 
+type NotificationColor = "fire" | "ocean" | "nature";
+
 type NotificationItem = {
   id: string;
   text: string;
-  color?: string;      // "#RRGGBB" or "RRGGBB"
-  dates?: string[];    // ["MM-DD", ...]
-  start?: string;      // "HH:MM" (optional)
-  end?: string;        // "HH:MM" (optional)
+  color?: NotificationColor; // now preset keys
+  dates?: string[];
+  start?: string;            // "HH:MM" optional
+  end?: string;              // "HH:MM" optional
 };
 
 type KnownDevice = { name: string; macs?: string[]; ips?: string[] };
@@ -1150,11 +1152,11 @@ app.get("/api/notifications/today", (req: Request, res: Response) => {
 
 const todays = list
   .filter(n => Array.isArray(n.dates) && n.dates.includes(today))
-  .filter(n => isWithinTimeWindow(n.start, n.end))   // <-- new time filter
+  .filter(n => isWithinTimeWindow(n.start, n.end)) // keep this if you added time windows
   .map(n => ({
     id: String(n.id ?? ""),
     text: String(n.text ?? "").trim(),
-    color: normalizeHex(n.color) ?? "#FFFFFF",
+    color: (COLOR_SET.has((n.color as NotificationColor)) ? (n.color as NotificationColor) : "fire"),
   }))
   .filter(n => n.id && n.text);
 
@@ -1183,37 +1185,42 @@ function writeNotificationsFile(list: NotificationItem[]) {
 }
 
 // Validation
-const RE_MD = /^\d{2}-\d{2}$/;      // "MM-DD"
-const RE_HM = /^\d{2}:\d{2}$/;      // "HH:MM"
-function isValidHM(s?: string) {
-  if (!s) return true;
-  if (!RE_HM.test(s)) return false;
-  const [h, m] = s.split(":").map(Number);
-  return h >= 0 && h <= 23 && m >= 0 && m <= 59;
-}
-function validateNotification(input: any, idFromParam?: string): { ok: true; value: NotificationItem } | { ok: false; msg: string } {
+const COLOR_SET = new Set<NotificationColor>(["fire", "ocean", "nature"]);
+
+function validateNotification(
+  input: any,
+  idFromParam?: string
+): { ok: true; value: NotificationItem } | { ok: false; msg: string } {
   const id = String(idFromParam ?? input?.id ?? "").trim() || String(Date.now());
   const text = String(input?.text ?? "").trim();
   if (!text) return { ok: false, msg: "Missing text" };
 
-  let color = normalizeHex(input?.color ?? "");
-  if (!color) color = "#FFFFFF";
+  // Default to "fire" if missing/invalid
+  let color = String(input?.color ?? "fire").trim().toLowerCase() as NotificationColor;
+  if (!COLOR_SET.has(color)) color = "fire";
+
+  const RE_MD = /^\d{2}-\d{2}$/;
+  const RE_HM = /^\d{2}:\d{2}$/;
 
   const datesRaw = Array.isArray(input?.dates) ? input.dates : [];
-  const dates = datesRaw
-    .map((d: any) => String(d || "").trim())
-    .filter(Boolean);
+  const dates = datesRaw.map((d: any) => String(d || "").trim()).filter(Boolean);
   if (dates.length === 0 || !dates.every((d: string) => RE_MD.test(d))) {
     return { ok: false, msg: "dates must be array of 'MM-DD'" };
   }
 
   const start = input?.start ? String(input.start) : undefined;
   const end   = input?.end   ? String(input.end)   : undefined;
+
+  const isValidHM = (s?: string) => {
+    if (!s) return true;
+    if (!RE_HM.test(s)) return false;
+    const [h, m] = s.split(":").map(Number);
+    return h >= 0 && h <= 23 && m >= 0 && m <= 59;
+  };
   if (!isValidHM(start) || !isValidHM(end)) return { ok: false, msg: "start/end must be 'HH:MM'" };
 
   return { ok: true, value: { id, text, color, dates, start, end } };
 }
-
 
 // ===================== Notifications ADMIN API =============================
 

@@ -15,9 +15,9 @@ type Notification = {
 type ListResponse = { items?: Notification[] } | Notification[];
 
 const COLOR_PRESETS = [
-  { key: "fire",  label: "Fire",  base: "#ff416c" },
-  { key: "ocean", label: "Ocean", base: "#0082c8" },
-  { key: "mint",  label: "Mint",  base: "#00c6ff" },
+  { key: "fire",   label: "Fire",   preview: "linear-gradient(135deg, #ff416c 0%, #ff4b2b 40%, #ff9966 100%)" },
+  { key: "ocean",  label: "Ocean",  preview: "linear-gradient(135deg, #667db6 0%, #0082c8 50%, #00c6ff 100%)" },
+  { key: "nature", label: "Nature", preview: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)" },
 ];
 
 function gradientPreview(base: string) {
@@ -75,10 +75,7 @@ export default function Admin({ theme }: AdminProps) {
   const [end, setEnd] = useState("");               // "HH:MM"
   const [preset, setPreset] = useState<string>(COLOR_PRESETS[0].key);
 
-  const presetBase = useMemo(
-    () => COLOR_PRESETS.find(p => p.key === preset)?.base || COLOR_PRESETS[0].base,
-    [preset]
-  );
+
 
   const parseDates = (s: string): string[] =>
     s
@@ -124,20 +121,20 @@ export default function Admin({ theme }: AdminProps) {
     setDatesCsv((n.dates || []).join(", "));
     setStart(n.start || "");
     setEnd(n.end || "");
-    const found = COLOR_PRESETS.find(p => (n.color || "").toLowerCase() === p.base.toLowerCase());
-    setPreset(found?.key || COLOR_PRESETS[0].key);
+const found = COLOR_PRESETS.find(p => (n.color || "").toLowerCase() === p.key);
+setPreset(found?.key || COLOR_PRESETS[0].key);
   };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload: Notification = {
-      id: editing?.id || String(Date.now()),
-      text: text.trim(),
-      color: presetBase,
-      dates: parseDates(datesCsv),
-      start: start.trim() || undefined,
-      end: end.trim() || undefined,
-    };
+const payload: Notification = {
+  id: editing?.id || String(Date.now()),
+  text: text.trim(),
+  color: preset as any,         // <-- store "fire" | "ocean" | "nature"
+  dates: parseDates(datesCsv),
+  start: start.trim() || undefined,
+  end: end.trim() || undefined,
+};
 
     if (!payload.text) { setError("Tekst kan ikke være tom."); return; }
     if (!payload.dates?.length) { setError("Legg inn minst én dato (MM-DD)."); return; }
@@ -287,28 +284,26 @@ export default function Admin({ theme }: AdminProps) {
               <label style={{ display: "block", marginBottom: 6 }}>Farge (gradient-preset)</label>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 {COLOR_PRESETS.map(p => (
-                  <button
-                    key={p.key}
-                    type="button"
-                    onClick={() => setPreset(p.key)}
-                    style={{
-                      width: 120,
-                      height: 44,
-                      borderRadius: 10,
-                      border: preset === p.key ? "2px solid #4caf50" : `1px solid ${theme.border}`,
-                      backgroundImage: gradientPreview(p.base),
-                      backgroundColor: theme.card,
-                      color: theme.text,
-                      cursor: "pointer",
-                    }}
-                    title={p.label}
-                  >
-                    {p.label}
-                  </button>
+<button
+  key={p.key}
+  type="button"
+  onClick={() => setPreset(p.key)}
+  style={{
+    width: 120,
+    height: 44,
+    borderRadius: 10,
+    border: preset === p.key ? "2px solid #4caf50" : `1px solid ${theme.border}`,
+    backgroundImage: p.preview,
+    backgroundColor: theme.card,
+    color: theme.text,
+    cursor: "pointer",
+  }}
+  title={p.label}
+>
+  {p.label}
+</button>
+
                 ))}
-              </div>
-              <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
-                Lagres som basefarge <code>{presetBase}</code> og vises med appens gradient.
               </div>
             </div>
           </div>

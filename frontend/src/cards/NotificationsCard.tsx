@@ -47,15 +47,15 @@ export default function NotificationCard({ theme, colors, isDay, rotateMs = 1000
     return () => clearInterval(id);
   }, [items, rotateMs]);
 
-  const current = items?.length ? items[index % items.length] : null;
+const current = items?.length ? items[index % items.length] : null;
 
-  const gradientBg = `linear-gradient(
-  45deg,
-  #d88b7fff 0%,
-  #ed552b 25%,
-  #e95b30 75%,
-  #a1402e 100%
-)`;
+type NotificationColor = "fire" | "ocean" | "nature";
+
+const GRADIENTS: Record<NotificationColor, string> = {
+  fire:   "linear-gradient(135deg, #ff416c 0%, #ff4b2b 40%, #ff9966 100%)",
+  ocean:  "linear-gradient(135deg, #667db6 0%, #0082c8 50%, #00c6ff 100%)",
+  nature: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)",
+};
 
 
   // Match NRK/other cards’ container styling
@@ -63,7 +63,10 @@ export default function NotificationCard({ theme, colors, isDay, rotateMs = 1000
     flex: "0 0 auto",
     alignSelf: "start",
     width: "100%",
-    background: gradientBg,
+  backgroundColor: theme.card,
+  backgroundImage: current?.color && (GRADIENTS as any)[current.color as NotificationColor]
+    ? GRADIENTS[current.color as NotificationColor]
+    : GRADIENTS.fire, // fallback
     borderRadius: 20,
     padding: 20,
     border: `1px solid ${theme.border}`,
