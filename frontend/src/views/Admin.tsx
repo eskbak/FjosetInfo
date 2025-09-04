@@ -298,20 +298,23 @@ export default function Admin({ theme }: AdminProps) {
   const [end, setEnd] = useState("");
   const [preset, setPreset] = useState<NonNullable<Notification["color"]>>("ocean");
 
-  const monthOpts = useMemo(
-    () =>
-      Array.from({ length: 12 }, (_, i) => {
-        const m = i + 1;
-        const label = new Date(2000, i, 1)
-          .toLocaleString("nb-NO", { month: "short" })
-          .replace(/\.$/, "");
-        return {
-          value: String(m).padStart(2, "0"),
-          label: `${label} (${String(m).padStart(2, "0")})`,
-        };
-      }),
-    []
-  );
+const monthOpts = useMemo(
+  () =>
+    Array.from({ length: 12 }, (_, i) => {
+      const m = i + 1;
+      let label = new Date(2000, i, 1)
+        .toLocaleString("nb-NO", { month: "long" })
+        .replace(/\.$/, "");
+      label = label.charAt(0).toUpperCase() + label.slice(1);
+
+      return {
+        value: String(m).padStart(2, "0"), // still keep numeric value internally
+        label, // only the month name is shown
+      };
+    }),
+  []
+);
+
 
   const dayOpts = useMemo(() => {
     const m = Number(month);
@@ -495,8 +498,8 @@ export default function Admin({ theme }: AdminProps) {
           <div style={{ display: "grid", gap: 10 }}>
             <label style={{ fontSize: 14 }}>Dato(er)</label>
             <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr auto", gap: 10 }}>
-              <Select aria-label="Måned" value={month} onChange={setMonth} options={monthOpts} theme={theme} />
               <Select aria-label="Dag" value={day} onChange={setDay} options={dayOpts} theme={theme} />
+              <Select aria-label="Måned" value={month} onChange={setMonth} options={monthOpts} theme={theme} />
               <Button onClick={addDate} variant="primary" theme={theme}>
                 Legg til dato
               </Button>
