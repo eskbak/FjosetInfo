@@ -36,7 +36,7 @@ export default function NotificationCard({ theme, colors, isDay, rotateMs = 1000
     };
 
     fetchNow();
-    const poll = setInterval(fetchNow, 300_000); // 5 min
+    const poll = setInterval(fetchNow, 180_000); // 3 min
     return () => clearInterval(poll);
   }, []);
 
