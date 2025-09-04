@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Theme } from "../types";
 
 type AdminProps = { theme: Theme };
@@ -6,7 +6,7 @@ type AdminProps = { theme: Theme };
 type Notification = {
   id: string;
   text: string;
-  color?: string;   // "fire" | "ocean" | "nature"
+  color?: "fire" | "ocean" | "nature";
   dates?: string[]; // ["MM-DD", ...]
   start?: string;   // "HH:MM"
   end?: string;     // "HH:MM"
@@ -14,12 +14,17 @@ type Notification = {
 
 type ListResponse = { items?: Notification[] } | Notification[];
 
-// Preset choices shown in the UI (we store only the key in `color`)
 const COLOR_PRESETS = [
-  { key: "fire",   label: "Fire",   preview: "linear-gradient(135deg, #ff416c 0%, #ff4b2b 40%, #ff9966 100%)" },
-  { key: "ocean",  label: "Ocean",  preview: "linear-gradient(135deg, #667db6 0%, #0082c8 50%, #00c6ff 100%)" },
-  { key: "nature", label: "Nature", preview: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)" },
+  { key: "fire" as const,   label: "Fire",   preview: "linear-gradient(135deg, #ff416c 0%, #ff4b2b 40%, #ff9966 100%)" },
+  { key: "ocean" as const,  label: "Ocean",  preview: "linear-gradient(135deg, #667db6 0%, #0082c8 50%, #00c6ff 100%)" },
+  { key: "nature" as const, label: "Nature", preview: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)" },
 ];
+
+const GRADIENT_SWATCH: Record<NonNullable<Notification["color"]>, string> = {
+  fire:   "linear-gradient(135deg, #ff416c 0%, #ff4b2b 50%, #ff9966 100%)",
+  ocean:  "linear-gradient(135deg, #667db6 0%, #0082c8 50%, #00c6ff 100%)",
+  nature: "linear-gradient(135deg, #11998e 0%, #38ef7d 100%)",
+};
 
 function card(theme: Theme): React.CSSProperties {
   return {
@@ -30,22 +35,224 @@ function card(theme: Theme): React.CSSProperties {
   };
 }
 
-export default function Admin({ theme }: AdminProps) {
-  // --- responsive helper ---
-  const [isNarrow, setIsNarrow] = useState(() =>
-    typeof window !== "undefined" ? window.innerWidth < 640 : false
+function useIsNarrow(breakpoint = 780) {
+  const [narrow, setNarrow] = useState(
+    typeof window !== "undefined" ? window.innerWidth < breakpoint : true
   );
   useEffect(() => {
-    const onResize = () => setIsNarrow(window.innerWidth < 640);
+    const onResize = () => setNarrow(window.innerWidth < breakpoint);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, []);
-  const gridCols = isNarrow ? "1fr" : "1fr 1fr";
+  }, [breakpoint]);
+  return narrow;
+}
 
-  // --- client-side gate that talks to your server /api/admin/login ---
+/** Month/day helper for building MM-DD without a year */
+function daysInMonth(month: number) {
+  if (month === 2) return 29; // allow Feb 29 (no year context)
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+}
+
+function Select({
+  value,
+  onChange,
+  options,
+  theme,
+  style,
+  "aria-label": ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: Array<{ value: string; label: string }>;
+  theme: Theme;
+  style?: React.CSSProperties;
+  "aria-label"?: string;
+}) {
+  return (
+    <select
+      aria-label={ariaLabel}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={{
+        appearance: "none",
+        WebkitAppearance: "none",
+        width: "100%",
+        padding: "14px 16px",
+        borderRadius: 12,
+        border: `1px solid ${theme.border}`,
+        background: theme.card,
+        color: theme.text,
+        fontSize: 16,
+        ...style,
+      }}
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function Input({
+  value,
+  onChange,
+  placeholder,
+  theme,
+  type = "text",
+  ariaLabel,
+  style,
+  inputMode,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  theme: Theme;
+  type?: string;
+  ariaLabel?: string;
+  style?: React.CSSProperties;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+}) {
+  return (
+    <input
+      aria-label={ariaLabel}
+      type={type}
+      value={value}
+      inputMode={inputMode}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      style={{
+        width: "100%",
+        padding: "14px 16px",
+        borderRadius: 12,
+        border: `1px solid ${theme.border}`,
+        background: theme.card,
+        color: theme.text,
+        fontSize: 16,
+        ...style,
+      }}
+    />
+  );
+}
+
+function Button({
+  children,
+  onClick,
+  theme,
+  type = "button",
+  variant = "default",
+  block,
+  disabled,
+  style,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  theme: Theme;
+  type?: "button" | "submit";
+  variant?: "default" | "danger" | "ghost" | "primary";
+  block?: boolean;
+  disabled?: boolean;
+  style?: React.CSSProperties;
+}) {
+  const base: React.CSSProperties = {
+    padding: "14px 16px",
+    borderRadius: 12,
+    border: `1px solid ${theme.border}`,
+    background: theme.card,
+    color: theme.text,
+    fontSize: 16,
+    cursor: disabled ? "not-allowed" : "pointer",
+    width: block ? "100%" : undefined,
+    opacity: disabled ? 0.6 : 1,
+    transition: "transform 120ms ease",
+  };
+
+  const variants: Record<string, React.CSSProperties> = {
+    default: {},
+    ghost: { background: "transparent" },
+    danger: { color: "#e53935", borderColor: "#e53935" },
+    primary: {
+      background: "linear-gradient(135deg, #0082c8, #00c6ff)",
+      color: "#fff",
+      borderColor: "transparent",
+    },
+  };
+
+  return (
+    <button
+      type={type}
+      onClick={disabled ? undefined : onClick}
+      style={{ ...base, ...variants[variant], ...style }}
+      onMouseDown={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.transform = "scale(0.98)";
+      }}
+      onMouseUp={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
+      }}
+      onMouseLeave={(e) => {
+        (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Chip({
+  label,
+  onRemove,
+  theme,
+}: {
+  label: string;
+  onRemove?: () => void;
+  theme: Theme;
+}) {
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "8px 12px",
+        borderRadius: 999,
+        border: `1px solid ${theme.border}`,
+        background: theme.card,
+        fontSize: 14,
+      }}
+    >
+      <span>{label}</span>
+      {onRemove && (
+        <button
+          aria-label={`Fjern ${label}`}
+          onClick={onRemove}
+          style={{
+            border: "none",
+            background: "transparent",
+            color: "#e53935",
+            cursor: "pointer",
+            fontSize: 18,
+            lineHeight: 1,
+          }}
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
+
+export default function Admin({ theme }: AdminProps) {
+  const isNarrow = useIsNarrow(780);
+
+  // ---- Auth (server-side via /api/admin/login) ----
   const [pass, setPass] = useState("");
   const [authed, setAuthed] = useState<boolean>(() => {
-    try { return sessionStorage.getItem("adminAuthed") === "1"; } catch { return false; }
+    try {
+      return sessionStorage.getItem("adminAuthed") === "1";
+    } catch {
+      return false;
+    }
   });
   const [authError, setAuthError] = useState("");
 
@@ -60,7 +267,9 @@ export default function Admin({ theme }: AdminProps) {
       });
       const j = await r.json().catch(() => ({}));
       if (r.ok && j?.ok) {
-        try { sessionStorage.setItem("adminAuthed", "1"); } catch {}
+        try {
+          sessionStorage.setItem("adminAuthed", "1");
+        } catch {}
         setAuthed(true);
       } else {
         setAuthError(j?.error || "Feil passord.");
@@ -70,30 +279,54 @@ export default function Admin({ theme }: AdminProps) {
     }
   };
 
-  // --- CRUD state ---
+  // ---- CRUD ----
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [items, setItems] = useState<Notification[]>([]);
   const [editing, setEditing] = useState<Notification | null>(null);
 
-  // New/edit form
+  // Form
   const [text, setText] = useState("");
-  const [datesCsv, setDatesCsv] = useState(""); // "MM-DD, MM-DD"
+  const [dates, setDates] = useState<string[]>([]);
+  const [month, setMonth] = useState<string>(() =>
+    String(new Date().getMonth() + 1).padStart(2, "0")
+  );
+  const [day, setDay] = useState<string>(() =>
+    String(new Date().getDate()).padStart(2, "0")
+  );
   const [start, setStart] = useState("");
   const [end, setEnd] = useState("");
-  const [preset, setPreset] = useState<string>(COLOR_PRESETS[0].key);
+  const [preset, setPreset] = useState<NonNullable<Notification["color"]>>("ocean");
 
-  const parseDates = (s: string): string[] =>
-    s
-      .split(/[,\s]+/)
-      .map((x) => x.trim())
-      .filter(Boolean)
-      .map((x) =>
-        x
-          .replace(/^(\d)\-(\d)$/, "0$1-0$2")
-          .replace(/^(\d)\-(\d{2})$/, "0$1-$2")
-          .replace(/^(\d{2})\-(\d)$/, "$1-0$2")
-      );
+  const monthOpts = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, i) => {
+        const m = i + 1;
+        const label = new Date(2000, i, 1)
+          .toLocaleString("nb-NO", { month: "short" })
+          .replace(/\.$/, "");
+        return {
+          value: String(m).padStart(2, "0"),
+          label: `${label} (${String(m).padStart(2, "0")})`,
+        };
+      }),
+    []
+  );
+
+  const dayOpts = useMemo(() => {
+    const m = Number(month);
+    const max = daysInMonth(m);
+    return Array.from({ length: max }, (_, i) => {
+      const d = i + 1;
+      return { value: String(d).padStart(2, "0"), label: String(d).padStart(2, "0") };
+    });
+  }, [month]);
+
+  const addDate = () => {
+    const md = `${month}-${day}`;
+    if (!dates.includes(md)) setDates((arr) => [...arr, md].sort());
+  };
+  const removeDate = (md: string) => setDates((arr) => arr.filter((d) => d !== md));
 
   const load = async () => {
     try {
@@ -102,7 +335,7 @@ export default function Admin({ theme }: AdminProps) {
       const r = await fetch("/api/notifications", { cache: "no-store" });
       if (!r.ok) throw new Error(`Server ${r.status}`);
       const j: ListResponse = await r.json();
-      const arr = Array.isArray(j) ? j : (j.items ?? []);
+      const arr = Array.isArray(j) ? j : j.items ?? [];
       setItems(arr);
     } catch (e: any) {
       setError(e?.message || "Kunne ikke laste varsler");
@@ -111,25 +344,28 @@ export default function Admin({ theme }: AdminProps) {
     }
   };
 
-  useEffect(() => { if (authed) load(); }, [authed]);
+  useEffect(() => {
+    if (authed) load();
+  }, [authed]);
 
   const resetForm = () => {
     setEditing(null);
     setText("");
-    setDatesCsv("");
+    setDates([]);
     setStart("");
     setEnd("");
-    setPreset(COLOR_PRESETS[0].key);
+    setMonth(String(new Date().getMonth() + 1).padStart(2, "0"));
+    setDay(String(new Date().getDate()).padStart(2, "0"));
+    setPreset("ocean");
   };
 
   const startEdit = (n: Notification) => {
     setEditing(n);
     setText(n.text || "");
-    setDatesCsv((n.dates || []).join(", "));
+    setDates([...(n.dates || [])].sort());
     setStart(n.start || "");
     setEnd(n.end || "");
-    const found = COLOR_PRESETS.find((p) => (n.color || "").toLowerCase() === p.key);
-    setPreset(found?.key || COLOR_PRESETS[0].key);
+    setPreset((n.color as any) || "ocean");
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -137,20 +373,28 @@ export default function Admin({ theme }: AdminProps) {
     const payload: Notification = {
       id: editing?.id || String(Date.now()),
       text: text.trim(),
-      color: preset as any, // "fire" | "ocean" | "nature"
-      dates: parseDates(datesCsv),
+      color: preset,
+      dates: dates.slice(),
       start: start.trim() || undefined,
       end: end.trim() || undefined,
     };
 
-    if (!payload.text) { setError("Tekst kan ikke være tom."); return; }
-    if (!payload.dates?.length) { setError("Legg inn minst én dato (MM-DD)."); return; }
+    if (!payload.text) {
+      setError("Tekst kan ikke være tom.");
+      return;
+    }
+    if (!payload.dates?.length) {
+      setError("Legg inn minst én dato (MM-DD).");
+      return;
+    }
 
     try {
       setLoading(true);
       setError("");
       const method = editing ? "PUT" : "POST";
-      const url = editing ? `/api/notifications/${encodeURIComponent(payload.id)}` : "/api/notifications";
+      const url = editing
+        ? `/api/notifications/${encodeURIComponent(payload.id)}`
+        : "/api/notifications";
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -174,7 +418,9 @@ export default function Admin({ theme }: AdminProps) {
     try {
       setLoading(true);
       setError("");
-      const r = await fetch(`/api/notifications/${encodeURIComponent(id)}`, { method: "DELETE" });
+      const r = await fetch(`/api/notifications/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
       if (!r.ok) throw new Error(`Server ${r.status}`);
       await load();
       if (editing?.id === id) resetForm();
@@ -185,48 +431,26 @@ export default function Admin({ theme }: AdminProps) {
     }
   };
 
-  // --- Password gate UI ---
+  // --- Auth gate ---
   if (!authed) {
     return (
-      <div style={{ maxWidth: 720, margin: "0 auto", paddingBottom: 24 }}>
-        <h1 style={{ marginBottom: 16, fontSize: isNarrow ? 24 : 28 }}>Admin</h1>
+      <div style={{ maxWidth: 560, margin: "0 auto", paddingBottom: 24 }}>
+        <h1 style={{ marginBottom: 16, fontSize: 26 }}>Admin</h1>
         <div style={card(theme)}>
-          <form onSubmit={submitLogin}>
-            <label style={{ display: "block", marginBottom: 8 }}>Passord</label>
-            <input
+          <form onSubmit={submitLogin} style={{ display: "grid", gap: 12 }}>
+            <label style={{ fontSize: 14 }}>Passord</label>
+            <Input
               type="password"
               value={pass}
-              onChange={(e) => setPass(e.target.value)}
+              onChange={setPass}
               placeholder="Admin-passord"
-              autoComplete="current-password"
-              style={{
-                width: "100%",
-                padding: isNarrow ? 12 : 10,
-                borderRadius: 10,
-                border: `1px solid ${theme.border}`,
-                background: theme.card,
-                color: theme.text,
-                marginBottom: 12,
-                fontSize: isNarrow ? 16 : 14,
-              }}
+              ariaLabel="Admin-passord"
+              theme={theme}
             />
-            {authError && <div style={{ color: "#d33", marginBottom: 8 }}>{authError}</div>}
-            <button
-              type="submit"
-              disabled={!pass.trim()}
-              style={{
-                padding: isNarrow ? "12px 16px" : "10px 14px",
-                width: isNarrow ? "100%" : undefined,
-                borderRadius: 10,
-                border: `1px solid ${theme.border}`,
-                background: theme.card,
-                color: theme.text,
-                cursor: "pointer",
-                fontSize: isNarrow ? 16 : 14,
-              }}
-            >
+            {authError && <div style={{ color: "#e53935", fontSize: 14 }}>{authError}</div>}
+            <Button type="submit" variant="primary" block theme={theme} disabled={!pass.trim()}>
               Logg inn
-            </button>
+            </Button>
           </form>
         </div>
       </div>
@@ -234,154 +458,132 @@ export default function Admin({ theme }: AdminProps) {
   }
 
   // --- Admin UI ---
+  const gridCols = isNarrow ? "1fr" : "1fr 1fr";
+
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", paddingBottom: 24 }}>
-      <h1 style={{ marginBottom: 16, fontSize: isNarrow ? 24 : 28 }}>Admin</h1>
+    <div style={{ maxWidth: 1100, margin: "0 auto", paddingBottom: 28 }}>
+      <h1 style={{ marginBottom: 16, fontSize: 26 }}>Admin</h1>
 
       {/* Create / Edit */}
       <div style={{ ...card(theme), marginBottom: 16 }}>
-        <h2 style={{ marginTop: 0, fontSize: isNarrow ? 18 : 20 }}>
+        <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 18 }}>
           {editing ? "Rediger varsel" : "Nytt varsel"}
         </h2>
-        <form onSubmit={submit}>
-          <div style={{ display: "grid", gridTemplateColumns: gridCols, gap: 12 }}>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label style={{ display: "block", marginBottom: 6 }}>Tekst</label>
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                rows={isNarrow ? 4 : 3}
-                placeholder="Meldingstekst…"
-                style={{
-                  width: "100%",
-                  padding: isNarrow ? 12 : 10,
-                  borderRadius: 10,
-                  border: `1px solid ${theme.border}`,
-                  background: theme.card,
-                  color: theme.text,
-                  fontSize: isNarrow ? 16 : 14,
-                }}
-              />
+
+        <form onSubmit={submit} style={{ display: "grid", gap: 16 }}>
+          {/* Text */}
+          <div style={{ display: "grid", gap: 8 }}>
+            <label style={{ fontSize: 14 }}>Tekst</label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={4}
+              placeholder="Meldingstekst…"
+              style={{
+                width: "100%",
+                padding: 14,
+                borderRadius: 12,
+                border: `1px solid ${theme.border}`,
+                background: theme.card,
+                color: theme.text,
+                fontSize: 16,
+              }}
+            />
+          </div>
+
+          {/* Dates builder */}
+          <div style={{ display: "grid", gap: 10 }}>
+            <label style={{ fontSize: 14 }}>Dato(er)</label>
+            <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr auto", gap: 10 }}>
+              <Select aria-label="Måned" value={month} onChange={setMonth} options={monthOpts} theme={theme} />
+              <Select aria-label="Dag" value={day} onChange={setDay} options={dayOpts} theme={theme} />
+              <Button onClick={addDate} variant="primary" theme={theme}>
+                Legg til dato
+              </Button>
             </div>
 
-            <div>
-              <label style={{ display: "block", marginBottom: 6 }}>Dato(er)</label>
-              <input
-                value={datesCsv}
-                onChange={(e) => setDatesCsv(e.target.value)}
-                placeholder="MM-DD, MM-DD …"
-                style={{
-                  width: "100%",
-                  padding: isNarrow ? 12 : 10,
-                  borderRadius: 10,
-                  border: `1px solid ${theme.border}`,
-                  background: theme.card,
-                  color: theme.text,
-                  fontSize: isNarrow ? 16 : 14,
-                }}
-              />
+            {/* Chips */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {dates.length === 0 ? (
+                <div style={{ opacity: 0.7, fontSize: 14 }}>Ingen datoer lagt til ennå.</div>
+              ) : (
+                dates.map((d) => <Chip key={d} label={d} onRemove={() => removeDate(d)} theme={theme} />)
+              )}
             </div>
+          </div>
 
-            <div>
-              <label style={{ display: "block", marginBottom: 6 }}>Tidsrom (valgfritt)</label>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  value={start}
-                  onChange={(e) => setStart(e.target.value)}
-                  placeholder="Start HH:MM"
-                  inputMode="numeric"
-                  style={{
-                    flex: 1,
-                    padding: isNarrow ? 12 : 10,
-                    borderRadius: 10,
-                    border: `1px solid ${theme.border}`,
-                    background: theme.card,
-                    color: theme.text,
-                    fontSize: isNarrow ? 16 : 14,
-                  }}
-                />
-                <input
-                  value={end}
-                  onChange={(e) => setEnd(e.target.value)}
-                  placeholder="Slutt HH:MM"
-                  inputMode="numeric"
-                  style={{
-                    flex: 1,
-                    padding: isNarrow ? 12 : 10,
-                    borderRadius: 10,
-                    border: `1px solid ${theme.border}`,
-                    background: theme.card,
-                    color: theme.text,
-                    fontSize: isNarrow ? 16 : 14,
-                  }}
-                />
-              </div>
+          {/* Time window */}
+          <div style={{ display: "grid", gap: 10 }}>
+            <label style={{ fontSize: 14 }}>Tidsrom (valgfritt)</label>
+            <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr", gap: 10 }}>
+              <Input type="time" value={start} onChange={setStart} placeholder="Start HH:MM" ariaLabel="Starttid" theme={theme} />
+              <Input type="time" value={end} onChange={setEnd} placeholder="Slutt HH:MM" ariaLabel="Sluttid" theme={theme} />
             </div>
+            <div style={{ fontSize: 12, opacity: 0.7 }}>
+              Hvis tomt vises varselet hele dagen. Tidspicker bruker mobilens native «rullehjul».
+            </div>
+          </div>
 
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label style={{ display: "block", marginBottom: 6 }}>Farge (gradient-preset)</label>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                {COLOR_PRESETS.map((p) => (
+          {/* Color presets */}
+          <div style={{ display: "grid", gap: 10 }}>
+            <label style={{ fontSize: 14 }}>Farge (gradient)</label>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isNarrow ? "1fr" : `repeat(${COLOR_PRESETS.length}, 1fr)`,
+                gap: 10,
+              }}
+            >
+              {COLOR_PRESETS.map((p) => {
+                const active = preset === p.key;
+                return (
                   <button
                     key={p.key}
                     type="button"
                     onClick={() => setPreset(p.key)}
                     style={{
-                      width: isNarrow ? "100%" : 120,
-                      height: 44,
-                      borderRadius: 10,
-                      border: preset === p.key ? "2px solid #4caf50" : `1px solid ${theme.border}`,
-                      backgroundImage: p.preview,
-                      backgroundColor: theme.card,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: 12,
+                      borderRadius: 12,
+                      border: active ? "2px solid #4caf50" : `1px solid ${theme.border}`,
+                      background: theme.card,
                       color: theme.text,
                       cursor: "pointer",
-                      fontSize: isNarrow ? 16 : 14,
+                      fontSize: 16,
                     }}
-                    title={p.label}
                   >
-                    {p.label}
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        backgroundImage: p.preview,
+                        border: "none",
+                        flex: "0 0 auto",
+                      }}
+                    />
+                    <span>{p.label}</span>
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
           </div>
 
-          {error && <div style={{ color: "#d33", marginTop: 10 }}>{error}</div>}
+          {/* Errors */}
+          {error && <div style={{ color: "#e53935", fontSize: 14 }}>{error}</div>}
 
-          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                padding: isNarrow ? "12px 16px" : "10px 14px",
-                borderRadius: 10,
-                border: `1px solid ${theme.border}`,
-                background: theme.card,
-                color: theme.text,
-                cursor: "pointer",
-                fontSize: isNarrow ? 16 : 14,
-                width: isNarrow ? "100%" : undefined,
-              }}
-            >
+          {/* Actions */}
+          <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "auto auto", gap: 10 }}>
+            <Button type="submit" variant="primary" theme={theme} disabled={loading}>
               {editing ? "Lagre endringer" : "Opprett varsel"}
-            </button>
+            </Button>
             {editing && (
-              <button
-                type="button"
-                onClick={resetForm}
-                style={{
-                  padding: isNarrow ? "12px 16px" : "10px 14px",
-                  borderRadius: 10,
-                  border: `1px solid ${theme.border}`,
-                  background: theme.card,
-                  color: theme.text,
-                  cursor: "pointer",
-                  fontSize: isNarrow ? 16 : 14,
-                  width: isNarrow ? "100%" : undefined,
-                }}
-              >
+              <Button variant="ghost" theme={theme} onClick={resetForm}>
                 Avbryt
-              </button>
+              </Button>
             )}
           </div>
         </form>
@@ -389,94 +591,84 @@ export default function Admin({ theme }: AdminProps) {
 
       {/* Existing list */}
       <div style={card(theme)}>
-        <h2 style={{ marginTop: 0, fontSize: isNarrow ? 18 : 20 }}>Eksisterende varsler</h2>
+        <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 18 }}>Eksisterende varsler</h2>
         {items.length === 0 ? (
           <div style={{ opacity: 0.7 }}>{loading ? "Laster…" : "Ingen varsler."}</div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 8 }}>
-            {items.map((n) => (
-              <div
-                key={n.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isNarrow ? "1fr" : "1fr auto auto",
-                  gap: 8,
-                  alignItems: "center",
-                }}
-              >
+          <div style={{ display: "grid", gap: 10 }}>
+            {items.map((n) => {
+              const colorKey = (n.color ?? "ocean") as "fire" | "ocean" | "nature"; // <-- avoids angle-bracket type in JSX
+              return (
                 <div
+                  key={n.id}
                   style={{
-                    padding: 10,
-                    borderRadius: 10,
+                    display: "grid",
+                    gridTemplateColumns: isNarrow ? "1fr" : "1fr auto auto",
+                    gap: 10,
+                    alignItems: "center",
                     border: `1px solid ${theme.border}`,
+                    borderRadius: 12,
+                    padding: 12,
                     background: theme.card,
                   }}
                 >
-                  <div style={{ fontWeight: 600, marginBottom: 4 }}>{n.text}</div>
-                  <div style={{ fontSize: 12, opacity: 0.8 }}>
-                    Datoer: {(n.dates || []).join(", ") || "—"}
-                    {" · "}Tid: {n.start || "—"}–{n.end || "—"}
-                    {" · "}Farge: <code>{n.color || "—"}</code>
+                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <div
+                      aria-hidden
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 10,
+                        backgroundImage: GRADIENT_SWATCH[colorKey],
+                        flex: "0 0 auto",
+                      }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 700, marginBottom: 4 }}>{n.text}</div>
+                      <div style={{ fontSize: 12, opacity: 0.8 }}>
+                        Datoer: {(n.dates || []).join(", ") || "—"}
+                        {" · "}Tid: {n.start || "—"}–{n.end || "—"}
+                        {" · "}Farge: <code>{n.color || "—"}</code>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    justifyContent: isNarrow ? "stretch" : "flex-end",
-                    width: "100%",
-                  }}
-                >
-                  <button
+
+                  <Button
+                    theme={theme}
                     onClick={() => startEdit(n)}
-                    style={{
-                      padding: isNarrow ? "10px 14px" : "8px 10px",
-                      borderRadius: 10,
-                      border: `1px solid ${theme.border}`,
-                      background: theme.card,
-                      color: theme.text,
-                      cursor: "pointer",
-                      width: isNarrow ? "100%" : undefined,
-                    }}
+                    style={{ width: isNarrow ? "100%" : undefined }}
                   >
                     Rediger
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    theme={theme}
+                    variant="danger"
                     onClick={() => del(n.id)}
-                    style={{
-                      padding: isNarrow ? "10px 14px" : "8px 10px",
-                      borderRadius: 10,
-                      border: `1px solid ${theme.border}`,
-                      background: theme.card,
-                      color: "#d33",
-                      cursor: "pointer",
-                      width: isNarrow ? "100%" : undefined,
-                    }}
+                    style={{ width: isNarrow ? "100%" : undefined }}
                   >
                     Slett
-                  </button>
+                  </Button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
       <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7, display: "flex", gap: 8, flexWrap: "wrap" }}>
         Innlogget som admin.
-        <button
-          onClick={() => { try { sessionStorage.removeItem("adminAuthed"); } catch {} setAuthed(false); }}
-          style={{
-            padding: "6px 10px",
-            borderRadius: 8,
-            border: `1px solid ${theme.border}`,
-            background: theme.card,
-            color: theme.text,
-            cursor: "pointer",
+        <Button
+          theme={theme}
+          variant="ghost"
+          onClick={() => {
+            try {
+              sessionStorage.removeItem("adminAuthed");
+            } catch {}
+            setAuthed(false);
           }}
         >
           Logg ut
-        </button>
+        </Button>
       </div>
     </div>
   );

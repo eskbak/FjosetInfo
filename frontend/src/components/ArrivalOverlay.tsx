@@ -81,7 +81,7 @@ export default function ArrivalOverlay({
 useEffect(() => {
   if (!speakOnMount) return;
   const h = new Date().getHours();
-  if (h < 9 || h >= 22) return; // client-side guard (keep in sync with server env if you change it)
+  if (h < 12 || h >= 22) return; // client-side guard (keep in sync with server env if you change it)
 
   const text = typeof phrase === "function" ? phrase(name) : (phrase || `${name} er hjemme!`);
   fetch("/api/tts/play", {
