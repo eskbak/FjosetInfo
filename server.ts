@@ -1165,17 +1165,6 @@ const todays = list
   }
 });
 
-const ADMIN_KEY = process.env.ADMIN_KEY || ""; // REQUIRED for admin endpoints
-
-// Admin guard
-function requireAdmin(req: Request, res: Response, next: Function) {
-  const got = String(req.header("x-admin-key") || "");
-  if (!ADMIN_KEY || got !== ADMIN_KEY) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-  next();
-}
-
 // File IO (file is a raw JSON array)
 function readNotificationsFile(): NotificationItem[] {
   if (!fs.existsSync(NOTIFICATIONS_FILE)) return [];
@@ -1225,17 +1214,18 @@ function validateNotification(input: any, idFromParam?: string): { ok: true; val
   return { ok: true, value: { id, text, color, dates, start, end } };
 }
 
+
 // ===================== Notifications ADMIN API =============================
 
-// List all (admin)
-app.get("/api/notifications", requireAdmin, (_req: Request, res: Response) => {
+// List all (open)
+app.get("/api/notifications", (_req, res) => {
   const items = readNotificationsFile();
   res.setHeader("Cache-Control", "no-store");
   res.json({ items });
 });
 
-// Create
-app.post("/api/notifications", requireAdmin, (req: Request, res: Response) => {
+// Create (open)
+app.post("/api/notifications", (req, res) => {
   const parsed = validateNotification(req.body);
   if (!parsed.ok) return res.status(400).json({ error: parsed.msg });
 
@@ -1248,8 +1238,8 @@ app.post("/api/notifications", requireAdmin, (req: Request, res: Response) => {
   res.status(201).json({ ok: true, item: parsed.value });
 });
 
-// Update by id (full replace)
-app.put("/api/notifications/:id", requireAdmin, (req: Request, res: Response) => {
+// Update by id (open)
+app.put("/api/notifications/:id", (req, res) => {
   const id = String(req.params.id || "");
   if (!id) return res.status(400).json({ error: "Missing id" });
 
@@ -1265,8 +1255,8 @@ app.put("/api/notifications/:id", requireAdmin, (req: Request, res: Response) =>
   res.json({ ok: true, item: parsed.value });
 });
 
-// Delete by id
-app.delete("/api/notifications/:id", requireAdmin, (req: Request, res: Response) => {
+// Delete by id (open)
+app.delete("/api/notifications/:id", (req, res) => {
   const id = String(req.params.id || "");
   if (!id) return res.status(400).json({ error: "Missing id" });
 

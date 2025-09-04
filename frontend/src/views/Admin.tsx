@@ -6,15 +6,14 @@ type AdminProps = { theme: Theme };
 type Notification = {
   id: string;
   text: string;
-  color?: string;      // we’ll store preset base hex here
+  color?: string;      // base hex for gradient
   dates?: string[];    // ["MM-DD", ...]
   start?: string;      // "HH:MM"
   end?: string;        // "HH:MM"
 };
 
-type ListResponse = { items?: Notification[] } | Notification[]; // allow both shapes
+type ListResponse = { items?: Notification[] } | Notification[];
 
-// 3 preset gradient "bases" (we store only the base hex in `color`)
 const COLOR_PRESETS = [
   { key: "fire",  label: "Fire",  base: "#ff416c" },
   { key: "ocean", label: "Ocean", base: "#0082c8" },
@@ -34,12 +33,38 @@ function prettyCard(theme: Theme): React.CSSProperties {
   };
 }
 
+const ADMIN_PASS = import.meta.env.VITE_ADMIN_PASS || "";
+
 export default function Admin({ theme }: AdminProps) {
-  const [key, setKey] = useState<string>(() => localStorage.getItem("adminKey") || "");
-  const [authed, setAuthed] = useState<boolean>(false);
+  // ---- simple client-side gate ----
+  const [pass, setPass] = useState("");
+  const [authed, setAuthed] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem("adminAuthed") === "1";
+    } catch { return false; }
+  });
+  const [authError, setAuthError] = useState("");
+
+  const tryLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!ADMIN_PASS) {
+      // If no pass configured, allow through.
+      try { sessionStorage.setItem("adminAuthed", "1"); } catch {}
+      setAuthed(true);
+      return;
+    }
+    if (pass === ADMIN_PASS) {
+      try { sessionStorage.setItem("adminAuthed", "1"); } catch {}
+      setAuthed(true);
+      setAuthError("");
+    } else {
+      setAuthError("Feil passord.");
+    }
+  };
+
+  // ---- CRUD state ----
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
-
   const [items, setItems] = useState<Notification[]>([]);
   const [editing, setEditing] = useState<Notification | null>(null);
 
@@ -55,8 +80,6 @@ export default function Admin({ theme }: AdminProps) {
     [preset]
   );
 
-  const authHeader = useMemo(() => ({ "x-admin-key": key }), [key]);
-
   const parseDates = (s: string): string[] =>
     s
       .split(/[,\s]+/)
@@ -66,30 +89,25 @@ export default function Admin({ theme }: AdminProps) {
                  .replace(/^(\d)\-(\d{2})$/, "0$1-$2")
                  .replace(/^(\d{2})\-(\d)$/, "$1-0$2"));
 
-  const load = async (failSilently = false) => {
+  const load = async () => {
     try {
       setLoading(true);
       setError("");
-      const r = await fetch("/api/notifications", { headers: authHeader, cache: "no-store" });
-      if (r.status === 401 || r.status === 403) {
-        if (!failSilently) setError("Feil passord.");
-        setAuthed(false);
-        return;
-      }
+      const r = await fetch("/api/notifications", { cache: "no-store" });
+      if (!r.ok) throw new Error(`Server ${r.status}`);
       const j: ListResponse = await r.json();
       const arr = Array.isArray(j) ? j : (j.items ?? []);
       setItems(arr);
-      setAuthed(true);
-      localStorage.setItem("adminKey", key);
     } catch (e: any) {
-      if (!failSilently) setError(e?.message || "Kunne ikke laste varsler");
+      setError(e?.message || "Kunne ikke laste varsler");
     } finally {
       setLoading(false);
     }
   };
 
-  // on mount, attempt auto-login with stored key
-  useEffect(() => { if (key) load(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (authed) load();
+  }, [authed]);
 
   const resetForm = () => {
     setEditing(null);
@@ -106,7 +124,6 @@ export default function Admin({ theme }: AdminProps) {
     setDatesCsv((n.dates || []).join(", "));
     setStart(n.start || "");
     setEnd(n.end || "");
-    // map existing color to nearest preset; fallback to first
     const found = COLOR_PRESETS.find(p => (n.color || "").toLowerCase() === p.base.toLowerCase());
     setPreset(found?.key || COLOR_PRESETS[0].key);
   };
@@ -132,14 +149,14 @@ export default function Admin({ theme }: AdminProps) {
       const url = editing ? `/api/notifications/${encodeURIComponent(payload.id)}` : "/api/notifications";
       const r = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json", ...authHeader },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (!r.ok) {
         const t = await r.text().catch(() => "");
         throw new Error(t || `Server ${r.status}`);
       }
-      await load(true);
+      await load();
       resetForm();
     } catch (e: any) {
       setError(e?.message || "Kunne ikke lagre varsel");
@@ -153,12 +170,9 @@ export default function Admin({ theme }: AdminProps) {
     try {
       setLoading(true);
       setError("");
-      const r = await fetch(`/api/notifications/${encodeURIComponent(id)}`, {
-        method: "DELETE",
-        headers: authHeader,
-      });
+      const r = await fetch(`/api/notifications/${encodeURIComponent(id)}`, { method: "DELETE" });
       if (!r.ok) throw new Error(`Server ${r.status}`);
-      await load(true);
+      await load();
       if (editing?.id === id) resetForm();
     } catch (e: any) {
       setError(e?.message || "Kunne ikke slette varsel");
@@ -167,17 +181,18 @@ export default function Admin({ theme }: AdminProps) {
     }
   };
 
+  // ---- Password gate UI ----
   if (!authed) {
     return (
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <h1 style={{ marginBottom: 16 }}>Admin</h1>
         <div style={prettyCard(theme)}>
-          <form onSubmit={(e) => { e.preventDefault(); load(); }}>
+          <form onSubmit={tryLogin}>
             <label style={{ display: "block", marginBottom: 8 }}>Passord</label>
             <input
               type="password"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
               placeholder="Admin-passord"
               style={{
                 width: "100%", padding: 10, borderRadius: 10,
@@ -185,23 +200,29 @@ export default function Admin({ theme }: AdminProps) {
                 marginBottom: 12,
               }}
             />
-            {error && <div style={{ color: "#d33", marginBottom: 8 }}>{error}</div>}
+            {authError && <div style={{ color: "#d33", marginBottom: 8 }}>{authError}</div>}
             <button
               type="submit"
-              disabled={loading || !key.trim()}
+              disabled={!pass.trim() && !!ADMIN_PASS}
               style={{
                 padding: "10px 14px", borderRadius: 10, border: `1px solid ${theme.border}`,
                 background: theme.card, color: theme.text, cursor: "pointer",
               }}
             >
-              {loading ? "Logger inn…" : "Logg inn"}
+              Logg inn
             </button>
+            {!ADMIN_PASS && (
+              <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+                Ingen VITE_ADMIN_PASS satt – tilgang er åpen (passord kreves ikke).
+              </div>
+            )}
           </form>
         </div>
       </div>
     );
   }
 
+  // ---- Admin UI ----
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto" }}>
       <h1 style={{ marginBottom: 16 }}>Admin</h1>
@@ -325,13 +346,11 @@ export default function Admin({ theme }: AdminProps) {
       <div style={prettyCard(theme)}>
         <h2 style={{ marginTop: 0 }}>Eksisterende varsler</h2>
         {items.length === 0 ? (
-          <div style={{ opacity: 0.7 }}>Ingen varsler.</div>
+          <div style={{ opacity: 0.7 }}>{loading ? "Laster…" : "Ingen varsler."}</div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 8 }}>
             {items.map(n => (
-              <div key={n.id} style={{
-                display: "contents",
-              }}>
+              <div key={n.id} style={{ display: "contents" }}>
                 <div style={{
                   padding: 10, borderRadius: 10, border: `1px solid ${theme.border}`,
                   background: theme.card,
@@ -368,8 +387,9 @@ export default function Admin({ theme }: AdminProps) {
       </div>
 
       <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7 }}>
-        Innlogget som admin. <button
-          onClick={() => { localStorage.removeItem("adminKey"); setAuthed(false); }}
+        Innlogget som admin.
+        <button
+          onClick={() => { try { sessionStorage.removeItem("adminAuthed"); } catch {} setAuthed(false); }}
           style={{
             marginLeft: 8, padding: "4px 8px", borderRadius: 8, border: `1px solid ${theme.border}`,
             background: theme.card, color: theme.text, cursor: "pointer",
