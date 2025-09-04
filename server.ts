@@ -1275,6 +1275,17 @@ app.delete("/api/notifications/:id", (req, res) => {
   res.json({ ok: true, id });
 });
 
+app.post("/api/admin/login", (req, res) => {
+  const pw = String(req.body?.password || "");
+  if (!process.env.ADMIN_KEY) {
+    return res.status(500).json({ ok: false, error: "Server not configured" });
+  }
+  if (pw === process.env.ADMIN_KEY) {
+    return res.json({ ok: true });
+  }
+  res.status(403).json({ ok: false, error: "Wrong password" });
+});
+
 
 // ---------------------------------------------------------------------------
 // Static files & SPA fallback
