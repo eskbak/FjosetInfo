@@ -7,11 +7,13 @@ import CalendarView from "./views/CalendarView";
 import ArrivalOverlay from "./components/ArrivalOverlay";
 import PresenceDock from "./components/PresenceDock";
 import NotificationsCard from "./cards/NotificationsCard";
+import Admin from "./views/Admin"; // or "./Admin" depending on your structure
 import type { Theme, Colors } from "./types";
 
 export default function App() {
   // --- Arrival overlay state ---
   const [arrivalName, setArrivalName] = useState<string | null>(null);
+  const [route, setRoute] = useState<string>(window.location.hash || "");
 
   // poll presence
   const POLL_MS = 10_000;
@@ -118,6 +120,12 @@ export default function App() {
       }
     };
 
+    useEffect(() => {
+  const onHash = () => setRoute(window.location.hash || "");
+  window.addEventListener("hashchange", onHash);
+  return () => window.removeEventListener("hashchange", onHash);
+}, []);
+
     preloadId = window.setTimeout(doPrefetch, Math.max(0, ROTATE_MS - PRELOAD_MS));
     rotateId = window.setTimeout(() => {
       setView(nextView);
@@ -204,6 +212,26 @@ const tick = async () => {
     }
     lastAnnouncedAtRef.current.set(name, Date.now());
   };
+
+  // Admin route takes over the whole screen
+if (route === "#admin") {
+  return (
+    <div style={{ 
+      fontFamily: "system-ui, sans-serif",
+      fontSize: "clamp(10px, 2.2vw, 18px)",
+      background: theme.bg,
+      color: theme.text,
+      width: "100vw",
+      minHeight: "100vh",
+      padding: 24,
+      boxSizing: "border-box"
+    }}>
+      <Admin theme={theme} />
+    </div>
+  );
+}
+
+  // --- main app view ---
 
   return (
     <div style={pageStyle}>

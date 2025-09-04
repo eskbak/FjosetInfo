@@ -73,10 +73,10 @@ type GoogleEventItem = {
 type NotificationItem = {
   id: string;
   text: string;
-  color?: string;   // e.g. "FFFFFF" or "#FFFFFF"
-  dates?: string[]; // ["MM-DD", ...]
-  start?: string; // "HH:MM"
-  end?: string;   // "HH:MM"
+  color?: string;      // "#RRGGBB" or "RRGGBB"
+  dates?: string[];    // ["MM-DD", ...]
+  start?: string;      // "HH:MM" (optional)
+  end?: string;        // "HH:MM" (optional)
 };
 
 type KnownDevice = { name: string; macs?: string[]; ips?: string[] };
@@ -1164,6 +1164,120 @@ const todays = list
     return res.status(500).json({ error: e?.message || "notifications error" });
   }
 });
+
+const ADMIN_KEY = process.env.ADMIN_KEY || ""; // REQUIRED for admin endpoints
+
+// Admin guard
+function requireAdmin(req: Request, res: Response, next: Function) {
+  const got = String(req.header("x-admin-key") || "");
+  if (!ADMIN_KEY || got !== ADMIN_KEY) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+}
+
+// File IO (file is a raw JSON array)
+function readNotificationsFile(): NotificationItem[] {
+  if (!fs.existsSync(NOTIFICATIONS_FILE)) return [];
+  try {
+    const raw = fs.readFileSync(NOTIFICATIONS_FILE, "utf8");
+    const j = JSON.parse(raw);
+    return Array.isArray(j) ? (j as NotificationItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+function writeNotificationsFile(list: NotificationItem[]) {
+  const tmp = `${NOTIFICATIONS_FILE}.tmp-${Date.now()}`;
+  fs.writeFileSync(tmp, JSON.stringify(list, null, 2), "utf8");
+  fs.renameSync(tmp, NOTIFICATIONS_FILE);
+}
+
+// Validation
+const RE_MD = /^\d{2}-\d{2}$/;      // "MM-DD"
+const RE_HM = /^\d{2}:\d{2}$/;      // "HH:MM"
+function isValidHM(s?: string) {
+  if (!s) return true;
+  if (!RE_HM.test(s)) return false;
+  const [h, m] = s.split(":").map(Number);
+  return h >= 0 && h <= 23 && m >= 0 && m <= 59;
+}
+function validateNotification(input: any, idFromParam?: string): { ok: true; value: NotificationItem } | { ok: false; msg: string } {
+  const id = String(idFromParam ?? input?.id ?? "").trim() || String(Date.now());
+  const text = String(input?.text ?? "").trim();
+  if (!text) return { ok: false, msg: "Missing text" };
+
+  let color = normalizeHex(input?.color ?? "");
+  if (!color) color = "#FFFFFF";
+
+  const datesRaw = Array.isArray(input?.dates) ? input.dates : [];
+  const dates = datesRaw
+    .map((d: any) => String(d || "").trim())
+    .filter(Boolean);
+  if (dates.length === 0 || !dates.every((d: string) => RE_MD.test(d))) {
+    return { ok: false, msg: "dates must be array of 'MM-DD'" };
+  }
+
+  const start = input?.start ? String(input.start) : undefined;
+  const end   = input?.end   ? String(input.end)   : undefined;
+  if (!isValidHM(start) || !isValidHM(end)) return { ok: false, msg: "start/end must be 'HH:MM'" };
+
+  return { ok: true, value: { id, text, color, dates, start, end } };
+}
+
+// ===================== Notifications ADMIN API =============================
+
+// List all (admin)
+app.get("/api/notifications", requireAdmin, (_req: Request, res: Response) => {
+  const items = readNotificationsFile();
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ items });
+});
+
+// Create
+app.post("/api/notifications", requireAdmin, (req: Request, res: Response) => {
+  const parsed = validateNotification(req.body);
+  if (!parsed.ok) return res.status(400).json({ error: parsed.msg });
+
+  const items = readNotificationsFile();
+  if (items.some(n => n.id === parsed.value.id)) {
+    return res.status(409).json({ error: "id already exists" });
+  }
+  items.push(parsed.value);
+  writeNotificationsFile(items);
+  res.status(201).json({ ok: true, item: parsed.value });
+});
+
+// Update by id (full replace)
+app.put("/api/notifications/:id", requireAdmin, (req: Request, res: Response) => {
+  const id = String(req.params.id || "");
+  if (!id) return res.status(400).json({ error: "Missing id" });
+
+  const parsed = validateNotification(req.body, id);
+  if (!parsed.ok) return res.status(400).json({ error: parsed.msg });
+
+  const items = readNotificationsFile();
+  const idx = items.findIndex(n => n.id === id);
+  if (idx === -1) return res.status(404).json({ error: "Not found" });
+
+  items[idx] = parsed.value;
+  writeNotificationsFile(items);
+  res.json({ ok: true, item: parsed.value });
+});
+
+// Delete by id
+app.delete("/api/notifications/:id", requireAdmin, (req: Request, res: Response) => {
+  const id = String(req.params.id || "");
+  if (!id) return res.status(400).json({ error: "Missing id" });
+
+  const items = readNotificationsFile();
+  const next = items.filter(n => n.id !== id);
+  if (next.length === items.length) return res.status(404).json({ error: "Not found" });
+
+  writeNotificationsFile(next);
+  res.json({ ok: true, id });
+});
+
 
 // ---------------------------------------------------------------------------
 // Static files & SPA fallback
