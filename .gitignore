@@ -77,7 +77,7 @@ test-results/
 
 # Local storage
 settings.json
-birthdays.json
 known-devices.json
 notifications.json
-/avatars/
+avatars/
+frontend/src/assets/avatars/

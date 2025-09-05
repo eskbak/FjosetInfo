@@ -84,6 +84,14 @@ type NotificationItem = {
 type KnownDevice = { name: string; macs?: string[]; ips?: string[] };
 type NeighborRow = { ip: string; mac: string; state: string };
 
+// ---------------- Settings schema ----------------
+type Settings = {
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean };
+  dayHours: { start: number; end: number }; // 0..24 (end is exclusive)
+  calendarDaysAhead: number;                // 0..14
+  rotateSeconds: number;                    // 5..600
+};
+
 // ---------------------------------------------------------------------------
 // Paths / constants
 // ---------------------------------------------------------------------------
@@ -168,17 +176,6 @@ function normDevice(d: { name: string; macs?: string[]; ips?: string[] }): Known
     ips: Array.isArray(d.ips) ? d.ips.map((ip) => String(ip || "").trim()).filter(Boolean) : [],
   };
 }
-
-// Parse KNOWN_DEVICES from .env as proper JSON
-const KNOWN_DEVICES: KnownDevice[] = (() => {
-  try {
-    const raw = process.env.KNOWN_DEVICES || "[]";
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr.map(normDevice) : [];
-  } catch {
-    return [];
-  }
-})();
 
 // ---------------------------------------------------------------------------
 // Entur departures (no line filter)
@@ -608,7 +605,7 @@ function pingOnce(ip: string) {
   exec(`ping -c 1 -W 1 ${ip} >/dev/null 2>&1`);
 }
 function warmArpKnownIps() {
-  for (const d of KNOWN_DEVICES) for (const ip of d.ips || []) pingOnce(ip);
+  for (const d of KNOWN_DEVICES_DYNAMIC) for (const ip of d.ips || []) pingOnce(ip);
 }
 
 let lastNeighbors: NeighborRow[] = [];
@@ -622,7 +619,7 @@ function scanNeighbors() {
     lastNeighbors = readNeighbors();
 
     // Update "alive" timestamps for names matched this scan, but only if neighbor state is active
-    for (const dev of KNOWN_DEVICES) {
+    for (const dev of KNOWN_DEVICES_DYNAMIC) {
       const match = lastNeighbors.find(n =>
         (dev.macs || []).some(m => n.mac === m.toLowerCase()) ||
         (dev.ips || []).some(ip => n.ip === ip)
@@ -645,7 +642,7 @@ function computePresence() {
 
   // ARP presence with TTL on last alive sighting
   if (PRESENCE_MODE === "arp" || PRESENCE_MODE === "auto") {
-    for (const dev of KNOWN_DEVICES) {
+    for (const dev of KNOWN_DEVICES_DYNAMIC) {
       const ts = lastArpAliveAt.get(dev.name) || 0;
       if (now - ts <= ARP_PRESENT_TTL_SEC * 1000) {
         present.add(dev.name);
@@ -668,7 +665,7 @@ function computePresence() {
     present: [...present].sort(),
     seenVia,
     mode: PRESENCE_MODE,
-    known: KNOWN_DEVICES.map((d) => d.name).sort(),
+    known: KNOWN_DEVICES_DYNAMIC.map((d) => d.name).sort(),
     serverTime: new Date().toISOString(),
   };
 }
@@ -697,7 +694,7 @@ app.get("/api/presence/debug", (_req, res) => {
     mode: PRESENCE_MODE,
     arpPresentTtlSec: ARP_PRESENT_TTL_SEC,
     activeStates: [...ARP_ACTIVE_STATES],
-    knownDevices: KNOWN_DEVICES,
+    knownDevices: KNOWN_DEVICES_DYNAMIC,
     neighbors: lastNeighbors, // ip, mac, state
     lastAlive: [...lastArpAliveAt.entries()].map(([name, ts]) => ({
       name, lastAliveIso: new Date(ts).toISOString(), ageSec: Math.round((now - ts) / 1000),
@@ -976,34 +973,92 @@ app.put("/api/overlays", (req, res) => {
 // ---------------------------------------------------------------------------
 // Settings API
 // ---------------------------------------------------------------------------
+function normalizeSettings(input: any, prev?: Settings): Settings {
+  const base: Settings = prev ?? readJsonSafe<Settings>(SETTINGS_FILE, DEFAULT_SETTINGS as Settings);
+
+  // Keep previous as fallback so PATCH can be partial
+  const v = input?.viewsEnabled ?? base.viewsEnabled ?? {};
+  const dh = input?.dayHours ?? base.dayHours ?? {};
+
+  const start = clampInt(dh.start, 0, 23, base.dayHours.start);
+  // keep end in 1..24 and ensure end > start (push end to at least start+1)
+  let end = clampInt(dh.end, 1, 24, base.dayHours.end);
+  if (end <= start) end = Math.min(24, start + 1);
+
+  const out: Settings = {
+    viewsEnabled: {
+      dashboard: !!v.dashboard,
+      news: !!v.news,
+      calendar: !!v.calendar,
+    },
+    dayHours: { start, end },
+    calendarDaysAhead: clampInt(input?.calendarDaysAhead, 0, 14, base.calendarDaysAhead),
+    rotateSeconds: clampInt(input?.rotateSeconds, 5, 600, base.rotateSeconds),
+  };
+  return out;
+}
+
+function validateSettings(s: Settings): string[] {
+  const errors: string[] = [];
+  if (s.dayHours.start < 0 || s.dayHours.start > 23) errors.push("dayHours.start must be 0..23");
+  if (s.dayHours.end < 1 || s.dayHours.end > 24) errors.push("dayHours.end must be 1..24");
+  if (s.dayHours.end <= s.dayHours.start) errors.push("dayHours.end must be greater than start");
+  if (s.calendarDaysAhead < 0 || s.calendarDaysAhead > 14) errors.push("calendarDaysAhead must be 0..14");
+  if (s.rotateSeconds < 5 || s.rotateSeconds > 600) errors.push("rotateSeconds must be 5..600");
+  return errors;
+}
+
+// GET current settings
 app.get("/api/settings", (_req, res) => {
-  const s = readJsonSafe(SETTINGS_FILE, DEFAULT_SETTINGS);
+  const s = readJsonSafe<Settings>(SETTINGS_FILE, DEFAULT_SETTINGS as Settings);
   res.setHeader("Cache-Control", "no-store");
   res.json(s);
 });
 
+// PUT full update (expects the whole object)
 app.put("/api/settings", (req, res) => {
   try {
-    const body = req.body || {};
-    const v = body.viewsEnabled ?? {};
-    const next = {
-      viewsEnabled: {
-        dashboard: !!v.dashboard,
-        news: !!v.news,
-        calendar: !!v.calendar,
-      },
-      dayHours: {
-        start: clampInt(body?.dayHours?.start, 0, 23, DEFAULT_SETTINGS.dayHours.start),
-        end:   clampInt(body?.dayHours?.end,   1, 24, DEFAULT_SETTINGS.dayHours.end),
-      },
-      calendarDaysAhead: clampInt(body.calendarDaysAhead, 0, 14, DEFAULT_SETTINGS.calendarDaysAhead),
-      rotateSeconds:     clampInt(body.rotateSeconds,     5, 600, DEFAULT_SETTINGS.rotateSeconds),
-    };
+    const prev = readJsonSafe<Settings>(SETTINGS_FILE, DEFAULT_SETTINGS as Settings);
+    const next = normalizeSettings(req.body ?? {}, prev);
+    const errs = validateSettings(next);
+    if (errs.length) return res.status(400).json({ ok: false, errors: errs });
+
     writeJsonAtomic(SETTINGS_FILE, next);
     res.json({ ok: true, settings: next });
   } catch (e: any) {
     res.status(400).json({ ok: false, error: e?.message || "Invalid settings" });
   }
+});
+
+// PATCH partial update (only send fields you want to change)
+app.patch("/api/settings", (req, res) => {
+  try {
+    const prev = readJsonSafe<Settings>(SETTINGS_FILE, DEFAULT_SETTINGS as Settings);
+    const merged = { ...prev, ...(req.body ?? {}) };
+    // Keep nested objects merged properly:
+    if (req.body?.viewsEnabled) {
+      merged.viewsEnabled = { ...prev.viewsEnabled, ...req.body.viewsEnabled };
+    }
+    if (req.body?.dayHours) {
+      merged.dayHours = { ...prev.dayHours, ...req.body.dayHours };
+    }
+
+    const next = normalizeSettings(merged, prev);
+    const errs = validateSettings(next);
+    if (errs.length) return res.status(400).json({ ok: false, errors: errs });
+
+    writeJsonAtomic(SETTINGS_FILE, next);
+    res.json({ ok: true, settings: next });
+  } catch (e: any) {
+    res.status(400).json({ ok: false, error: e?.message || "Invalid settings" });
+  }
+});
+
+// Reset to defaults (handy button in Admin UI)
+app.post("/api/settings/reset", (_req, res) => {
+  const def = DEFAULT_SETTINGS as Settings;
+  writeJsonAtomic(SETTINGS_FILE, def);
+  res.json({ ok: true, settings: def });
 });
 
 // ---------------------------------------------------------------------------
@@ -1285,6 +1340,192 @@ app.post("/api/admin/login", (req, res) => {
   }
   res.status(403).json({ ok: false, error: "Wrong password" });
 });
+
+// ---------------------------------------------------------------------------
+// People Admin API
+// ---------------------------------------------------------------------------
+const KNOWN_DEVICES_FILE = process.env.KNOWN_DEVICES_FILE
+  ? path.resolve(process.cwd(), process.env.KNOWN_DEVICES_FILE)
+  : path.join(process.cwd(), "known-devices.json"); // root-level
+
+const AVATAR_DIR = path.join(__dirname, "frontend", "src", "assets", "avatars");
+fs.mkdirSync(AVATAR_DIR, { recursive: true });
+
+// Slug helper (lowercase, remove diacritics, keep a-z0-9-_)
+function slugifyName(name: string) {
+  return (name || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .trim();
+}
+
+function readKnownDevices(): KnownDevice[] {
+  try {
+    if (!fs.existsSync(KNOWN_DEVICES_FILE)) return [];
+    const raw = fs.readFileSync(KNOWN_DEVICES_FILE, "utf8");
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr.map((d: any) => normDevice({ name: d?.name || "", macs: d?.macs || [], ips: d?.ips || [] }));
+  } catch {
+    return [];
+  }
+}
+function writeKnownDevices(list: KnownDevice[]) {
+  writeJsonAtomic(KNOWN_DEVICES_FILE, list);
+}
+
+// Keep presence scanner in sync with file changes
+let KNOWN_DEVICES_DYNAMIC: KnownDevice[] = readKnownDevices();
+function refreshKnownDevicesForPresence() {
+  KNOWN_DEVICES_DYNAMIC = readKnownDevices();
+}
+
+
+// ---------------- People API ----------------
+
+// GET all people
+app.get("/api/people", (_req, res) => {
+  try {
+    const list = readKnownDevices();
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ items: list });
+  } catch (e: any) {
+    res.status(500).json({ error: e?.message || "Failed to read people" });
+  }
+});
+
+// POST add a person
+app.post("/api/people", (req, res) => {
+  try {
+    const body = req.body || {};
+    const name = String(body.name || "").trim();
+    const macs = Array.isArray(body.macs) ? body.macs.map(normMac).filter(Boolean) : [];
+    const ips = Array.isArray(body.ips) ? body.ips.map((x: any) => String(x || "").trim()).filter(Boolean) : [];
+
+    if (!name) return res.status(400).json({ ok: false, error: "Missing name" });
+
+    const list = readKnownDevices();
+    if (list.find((p) => p.name.toLowerCase() === name.toLowerCase())) {
+      return res.status(409).json({ ok: false, error: "Person already exists" });
+    }
+
+    list.push({ name, macs, ips });
+    writeKnownDevices(list);
+    refreshKnownDevicesForPresence();
+    res.json({ ok: true, item: { name, macs, ips } });
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e?.message || "Failed to add person" });
+  }
+});
+
+// PUT update a person by name (path param is original name)
+app.put("/api/people/:name", (req, res) => {
+  try {
+    const key = String(req.params.name || "").trim();
+    const body = req.body || {};
+
+    const list = readKnownDevices();
+    const idx = list.findIndex((p) => p.name.toLowerCase() === key.toLowerCase());
+    if (idx === -1) return res.status(404).json({ ok: false, error: "Not found" });
+
+    const nextName = String(body.name || list[idx].name).trim();
+    const macs = Array.isArray(body.macs) ? body.macs.map(normMac).filter(Boolean) : list[idx].macs || [];
+    const ips = Array.isArray(body.ips) ? body.ips.map((x: any) => String(x || "").trim()).filter(Boolean) : list[idx].ips || [];
+
+    // if renaming to another existing name, forbid
+    const conflict = list.find((p, i) => i !== idx && p.name.toLowerCase() === nextName.toLowerCase());
+    if (conflict) return res.status(409).json({ ok: false, error: "Name already used" });
+
+    list[idx] = { name: nextName, macs, ips };
+    writeKnownDevices(list);
+    refreshKnownDevicesForPresence();
+
+    // If renamed, optionally rename avatar file too (best-effort)
+    if (nextName !== key) {
+      const oldSlug = slugifyName(key);
+      const newSlug = slugifyName(nextName);
+      const oldFile = path.join(AVATAR_DIR, `${oldSlug}.png`);
+      const newFile = path.join(AVATAR_DIR, `${newSlug}.png`);
+      if (fs.existsSync(oldFile) && !fs.existsSync(newFile)) {
+        try { fs.renameSync(oldFile, newFile); } catch {}
+      }
+    }
+
+    res.json({ ok: true, item: list[idx] });
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e?.message || "Failed to update person" });
+  }
+});
+
+// DELETE person by name
+app.delete("/api/people/:name", (req, res) => {
+  try {
+    const key = String(req.params.name || "").trim();
+    const list = readKnownDevices();
+    const next = list.filter((p) => p.name.toLowerCase() !== key.toLowerCase());
+    if (next.length === list.length) return res.status(404).json({ ok: false, error: "Not found" });
+
+    writeKnownDevices(next);
+    refreshKnownDevicesForPresence();
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e?.message || "Failed to delete person" });
+  }
+});
+
+// Example endpoint (adjust to your file if you already have one):
+app.post("/api/people/:name/avatar",   express.json({ limit: "10mb" }), async (req, res) => {
+  try {
+    const name = String(req.params.name || "").trim();
+    const imageBase64 = String(req.body?.imageBase64 || "");
+
+    if (!name) return res.status(400).send("Missing name");
+    if (!imageBase64) return res.status(400).send("Missing image");
+
+    // Accept data URL or raw base64
+    const m = imageBase64.match(/^data:image\/png;base64,(.*)$/i);
+    const b64 = m ? m[1] : imageBase64;
+
+    const buf = Buffer.from(b64, "base64");
+    if (buf.length < 8 || buf[0] !== 0x89 || buf[1] !== 0x50) {
+      return res.status(400).send("Invalid PNG");
+    }
+
+    const slug = nameToSlug(name);
+    const out = path.join(AVATAR_DIR, `${slug}.png`);
+    fs.writeFileSync(out, buf);
+    res.json({ ok: true, file: `/avatars/${slug}.png` });
+  } catch (e: any) {
+    res.status(500).send(e?.message || "avatar write failed");
+  }
+});
+
+function nameToSlug(s: string) {
+  return String(s || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .trim();
+}
+
+
+// add alongside your other static routes (before SPA fallback)
+app.use(
+  "/avatars",
+  express.static(AVATAR_DIR, {
+    etag: false,
+    lastModified: true,
+    setHeaders: (res) => {
+      // dynamic-ish images; avoid long cache so updates show up quickly
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    },
+  })
+);
 
 
 // ---------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+// App.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import Header from "./components/Header";
 import DashboardView from "./views/DashboardView";
@@ -6,30 +7,61 @@ import CalendarView from "./views/CalendarView";
 import ArrivalOverlay from "./components/ArrivalOverlay";
 import PresenceDock from "./components/PresenceDock";
 import NotificationsCard from "./cards/NotificationsCard";
-import Admin from "./views/Admin";
+import AdminHome from "./views/admin/AdminHome";
+import AdminNotifications from "./views/admin/AdminNotifications";
+import AdminPersons from "./views/admin/AdminPersons";
+import AdminSettings from "./views/admin/AdminSettings";
 import type { Theme, Colors } from "./types";
 
+// Keep this in sync with server Settings type
+type Settings = {
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean };
+  dayHours: { start: number; end: number }; // end exclusive
+  calendarDaysAhead: number;                // 0..14
+  rotateSeconds: number;                    // 5..600
+};
+
+const DEFAULT_SETTINGS: Settings = {
+  viewsEnabled: { dashboard: true, news: true, calendar: true },
+  dayHours: { start: 6, end: 18 },
+  calendarDaysAhead: 5,
+  rotateSeconds: 30,
+};
+
 export default function App() {
-  // --- Arrival overlay state ---
-  const [arrivalName, setArrivalName] = useState<string | null>(null);
+  // ---------- SETTINGS (load + poll) ----------
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
 
-  // poll presence
-  const POLL_MS = 10_000;
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/settings", { cache: "no-store" });
+        if (!r.ok) return; // keep previous if server not ready
+        const j: Settings = await r.json();
+        if (alive) setSettings(j);
+      } catch {
+        /* ignore */
+      }
+    };
+    load();
+    const id = window.setInterval(load, 60_000); // poll every 60s
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
 
-  // remember current present set and "first fetch" baseline to avoid firing on load
-  const lastPresentRef = useRef<Set<string>>(new Set());
-  const baselineDoneRef = useRef(false);
-
-  // queue multiple arrivals that happen close together
-  const queueRef = useRef<string[]>([]);
-
-  // simple cooldown to avoid repeated alerts for the same person (5 minutes)
-  const lastAnnouncedAtRef = useRef<Map<string, number>>(new Map());
-  const ANNOUNCE_COOLDOWN_MS = 5 * 60 * 1000;
-
-  // ---- theme / day-night based on hardcoded dayHours ----
-  const localHour = new Date().getHours();
-  const isDay = localHour >= 6 && localHour < 18;
+  // --- theme / day-night based on settings.dayHours ---
+  const nowHour = new Date().getHours(); // 0..23
+  const isDay = (() => {
+    const { start, end } = settings.dayHours;
+    // Treat as [start, end) with end exclusive, wrap if end < start (overnight)
+    if (start < end) return nowHour >= start && nowHour < end;
+    if (start > end) return nowHour >= start || nowHour < end; // overnight
+    // start === end → degenerate; consider "always night"
+    return false;
+  })();
 
   const theme: Theme = isDay
     ? { bg: "#f6f7f9", text: "#0b1220", card: "#ffffff", border: "#e5e7eb" }
@@ -41,9 +73,10 @@ export default function App() {
     NRK: { primary: "#3600e6ff", dark: "#870000" },
   };
 
-  // ---------- HASH ROUTING (SSR-safe) ----------
-  const initialHash = typeof window !== "undefined" ? window.location.hash : "";
-  const [route, setRoute] = useState<string>(initialHash);
+  // ---------- HASH ROUTING ----------
+  const [route, setRoute] = useState<string>(() =>
+    typeof window !== "undefined" ? window.location.hash || "" : ""
+  );
 
   useEffect(() => {
     const onHash = () => setRoute(window.location.hash || "");
@@ -51,26 +84,78 @@ export default function App() {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  // 👉 Short-circuit: render Admin BEFORE any other effects/timers run
-  if (route === "#admin") {
-    return (
-      <div
-        style={{
-          fontFamily: "system-ui, sans-serif",
-          fontSize: "clamp(10px, 2.2vw, 18px)",
-          background: theme.bg,
-          color: theme.text,
-          width: "100vw",
-          minHeight: "100vh",
-          padding: 24,
-          boxSizing: "border-box",
-        }}
-      >
-        <Admin theme={theme} />
-      </div>
-    );
+  const isAdmin = route.startsWith("#admin");
+  if (isAdmin) {
+    const section = (route.match(/^#admin\/?(.*)$/)?.[1] || "").toLowerCase();
+
+    const adminShellStyle: React.CSSProperties = {
+      fontFamily: "system-ui, sans-serif",
+      fontSize: "clamp(12px, 2.2vw, 18px)",
+      background: theme.bg,
+      color: theme.text,
+      width: "100vw",
+      minHeight: "100vh",
+      padding: 24,
+      boxSizing: "border-box",
+    };
+
+    switch (true) {
+      case section === "" || section === "#admin":
+        return (
+          <div style={adminShellStyle}>
+            <AdminHome theme={theme} />
+          </div>
+        );
+      case section.startsWith("notifications"):
+        return (
+          <div style={adminShellStyle}>
+            <AdminNotifications theme={theme} />
+          </div>
+        );
+      case section.startsWith("persons"):
+        return (
+          <div style={adminShellStyle}>
+            <AdminPersons theme={theme} />
+          </div>
+        );
+      case section.startsWith("settings"):
+        return (
+          <div style={adminShellStyle}>
+            <AdminSettings theme={theme} />
+          </div>
+        );
+      default:
+        return (
+          <div style={adminShellStyle}>
+            <AdminHome theme={theme} />
+          </div>
+        );
+    }
   }
   // ---------- END HASH ROUTING ----------
+
+  // ---------- Derive rotation/order from settings ----------
+  type ViewKey = "dashboard" | "news" | "calendar";
+
+  const ORDER: ViewKey[] = useMemo(() => {
+    const list: ViewKey[] = [];
+    if (settings.viewsEnabled.dashboard) list.push("dashboard");
+    if (settings.viewsEnabled.news) list.push("news");
+    if (settings.viewsEnabled.calendar) list.push("calendar");
+    return list.length ? list : ["dashboard"]; // fallback to something
+  }, [settings.viewsEnabled.dashboard, settings.viewsEnabled.news, settings.viewsEnabled.calendar]);
+
+  const ROTATE_MS = Math.max(5, Math.min(600, settings.rotateSeconds)) * 1000;
+  const PRELOAD_MS = 5_000;
+
+  // --- Arrival overlay, presence, etc. ---
+  const [arrivalName, setArrivalName] = useState<string | null>(null);
+  const lastPresentRef = useRef<Set<string>>(new Set());
+  const baselineDoneRef = useRef(false);
+  const queueRef = useRef<string[]>([]);
+  const lastAnnouncedAtRef = useRef<Map<string, number>>(new Map());
+  const ANNOUNCE_COOLDOWN_MS = 5 * 60 * 1000;
+  const POLL_MS = 10_000;
 
   const pageStyle: React.CSSProperties = {
     fontFamily: "system-ui, sans-serif",
@@ -95,78 +180,71 @@ export default function App() {
       .join("");
   }, []);
 
-  // ---- rotation + prefetch (no hidden mounting) ----
-  type ViewKey = "dashboard" | "news" | "calendar";
-  const ORDER = useMemo<ViewKey[]>(() => ["dashboard", "news", "calendar"], []);
-  const ROTATE_MS = 45 * 1000; // fixed 45s
-  const PRELOAD_MS = 5_000; // start warming right before switch
-
   const [view, setView] = useState<ViewKey>(ORDER[0] ?? "dashboard");
 
-  // helper: warm network/code for a view
+  // If ORDER changes (e.g., toggled a view off), keep current view if possible, else fall back
+  useEffect(() => {
+    if (!ORDER.includes(view)) {
+      setView(ORDER[0] ?? "dashboard");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ORDER.join("|")]); // join to compare content, not ref
+
+  // helper: warm network/code for a view (uses settings.calendarDaysAhead)
   const prefetchFor = useMemo(() => {
     return async (name: ViewKey) => {
       try {
         if (name === "news") {
-          await fetch("/api/nrk/latest"); // server should set Cache-Control
+          await fetch("/api/nrk/latest");
         } else if (name === "calendar") {
-          // warm N-day window per hardcoded daysAhead
+          const days = Math.max(0, Math.min(14, settings.calendarDaysAhead));
           const start = new Date();
           start.setHours(0, 0, 0, 0);
           const end = new Date(start);
-          end.setDate(end.getDate() + Math.max(0, 4));
+          end.setDate(end.getDate() + days);
           end.setHours(23, 59, 59, 999);
           const qs = new URLSearchParams({
             timeMin: start.toISOString(),
             timeMax: end.toISOString(),
           });
           await fetch(`/api/calendar/upcoming?${qs.toString()}`);
-        } else if (name === "dashboard") {
-          // add dashboard prefetches if desired
-          // await fetch("/api/yr/today?lat=...&lon=...&hours=6");
-          // await fetch("/api/entur/departures?stopPlaceId=...&max=...");
         }
       } catch {
-        // ignore prefetch errors – real render will retry
+        /* ignore prefetch errors */
       }
     };
-  }, []);
+  }, [settings.calendarDaysAhead]);
 
+  // Rotation loop driven by settings.rotateSeconds and ORDER
   useEffect(() => {
-    // if all views toggled off, don't rotate; keep whatever view is set
     if (ORDER.length === 0) return;
 
-    let rotateId = 0 as unknown as number;
-    let preloadId = 0 as unknown as number;
+    let rotateId: number;
+    let preloadId: number;
     let idleId: number | undefined;
 
     const curIdx = Math.max(0, ORDER.indexOf(view));
     const nextView = ORDER[(curIdx + 1) % ORDER.length];
 
     const doPrefetch = () => {
-      const w = window as unknown as {
-        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-        cancelIdleCallback?: (id: number) => void;
-      };
-      if (w.requestIdleCallback) {
-        idleId = w.requestIdleCallback(() => prefetchFor(nextView), { timeout: PRELOAD_MS });
+      if ("requestIdleCallback" in window) {
+        // @ts-ignore
+        idleId = window.requestIdleCallback(() => prefetchFor(nextView), { timeout: PRELOAD_MS });
       } else {
         prefetchFor(nextView);
       }
     };
 
     preloadId = window.setTimeout(doPrefetch, Math.max(0, ROTATE_MS - PRELOAD_MS));
-    rotateId = window.setTimeout(() => {
-      setView(nextView);
-    }, ROTATE_MS);
+    rotateId = window.setTimeout(() => setView(nextView), ROTATE_MS);
 
     return () => {
       clearTimeout(preloadId);
       clearTimeout(rotateId);
-      const w = window as any;
-      if (idleId && w?.cancelIdleCallback) w.cancelIdleCallback(idleId);
+      // @ts-ignore
+      if (idleId && "cancelIdleCallback" in window) window.cancelIdleCallback(idleId);
     };
-  }, [view, prefetchFor, ORDER, ROTATE_MS, PRELOAD_MS]);
+  }, [view, ORDER, ROTATE_MS, prefetchFor]);
 
   // presence polling -> queue new arrivals
   useEffect(() => {
@@ -178,23 +256,16 @@ export default function App() {
         const cur = new Set(present);
 
         if (!baselineDoneRef.current) {
-          // first fetch: set baseline, don't alert existing people
           lastPresentRef.current = cur;
           baselineDoneRef.current = true;
           return;
         }
 
-        // clear cooldown for anyone who left since last poll
         const prev = lastPresentRef.current;
         const removed = [...prev].filter((p) => !cur.has(p));
-        for (const name of removed) {
-          lastAnnouncedAtRef.current.delete(name);
-        }
+        for (const name of removed) lastAnnouncedAtRef.current.delete(name);
 
-        // find newly present vs the previous poll
         const added = present.filter((p) => !prev.has(p));
-
-        // enqueue with cooldown
         const now = Date.now();
         for (const name of added) {
           const lastAt = lastAnnouncedAtRef.current.get(name) || 0;
@@ -205,21 +276,18 @@ export default function App() {
         }
 
         lastPresentRef.current = cur;
-
-        // if nothing showing, pop next
         if (!arrivalName && queueRef.current.length > 0) {
           setArrivalName(queueRef.current.shift() || null);
         }
       } catch {
-        // ignore; try again on next poll
+        /* ignore; try again on next poll */
       }
     };
 
-    // initial + interval
     tick();
     const id = window.setInterval(tick, POLL_MS);
     return () => clearInterval(id);
-  }, [arrivalName, ANNOUNCE_COOLDOWN_MS, POLL_MS]);
+  }, [arrivalName]);
 
   const handleArrivalClosed = () => {
     setArrivalName(null);
@@ -230,32 +298,27 @@ export default function App() {
     }, 300);
   };
 
-  // dev helper to trigger overlay manually
   const triggerArrival = (name: string) => {
     if (!name) return;
-    if (arrivalName) {
-      queueRef.current.push(name);
-    } else {
-      setArrivalName(name);
-    }
+    if (arrivalName) queueRef.current.push(name);
+    else setArrivalName(name);
     lastAnnouncedAtRef.current.set(name, Date.now());
   };
 
-  // --- main app view ---
   return (
     <div style={pageStyle}>
       <Header todayText={todayNo} />
 
-      <NotificationsCard theme={theme} colors={COLORS} isDay={isDay} rotateMs={10000} />
-
+      {/* Always-on cards */}
+      <NotificationsCard theme={theme} colors={COLORS} isDay={isDay} rotateMs={10_000} />
       <PresenceDock />
 
-      {/* Rotating views */}
+      {/* Rotating views based on settings */}
       {view === "dashboard" && <DashboardView theme={theme} colors={COLORS} isDay={isDay} />}
       {view === "news" && <NewsView theme={theme} colors={COLORS} isDay={isDay} />}
       {view === "calendar" && <CalendarView theme={theme} colors={COLORS} isDay={isDay} />}
 
-      {/* Arrival overlay (full-screen) */}
+      {/* Arrival overlay */}
       {arrivalName && <ArrivalOverlay name={arrivalName} onClose={handleArrivalClosed} />}
 
       {/* dev view switcher */}
@@ -267,64 +330,39 @@ export default function App() {
           display: "flex",
           gap: 8,
           opacity: 0.6,
+          flexWrap: "wrap",
         }}
       >
-        <button
-          onClick={() => setView("dashboard")}
-          style={{
-            padding: "6px 10px",
-            borderRadius: 10,
-            border: `1px solid ${theme.border}`,
-            background: theme.card,
-            color: theme.text,
-            cursor: "pointer",
-          }}
-        >
+        <button onClick={() => setView("dashboard")} style={btn(theme)}>
           Dashboard
         </button>
-        <button
-          onClick={() => setView("news")}
-          style={{
-            padding: "6px 10px",
-            borderRadius: 10,
-            border: `1px solid ${theme.border}`,
-            background: theme.card,
-            color: theme.text,
-            cursor: "pointer",
-          }}
-        >
+        <button onClick={() => setView("news")} style={btn(theme)}>
           News
         </button>
-        <button
-          onClick={() => setView("calendar")}
-          style={{
-            padding: "6px 10px",
-            borderRadius: 10,
-            border: `1px solid ${theme.border}`,
-            background: theme.card,
-            color: theme.text,
-            cursor: "pointer",
-          }}
-        >
+        <button onClick={() => setView("calendar")} style={btn(theme)}>
           Calendar
         </button>
         <button
           onClick={() => {
             const n = prompt("Who arrived?", "Testperson") || "";
-            triggerArrival(n.trim());
+            triggerArrival((n || "").trim());
           }}
-          style={{
-            padding: "6px 10px",
-            borderRadius: 10,
-            border: `1px solid ${theme.border}`,
-            background: theme.card,
-            color: theme.text,
-            cursor: "pointer",
-          }}
+          style={btn(theme)}
         >
           Test arrival
         </button>
       </div>
     </div>
   );
+}
+
+function btn(theme: Theme): React.CSSProperties {
+  return {
+    padding: "6px 10px",
+    borderRadius: 10,
+    border: `1px solid ${theme.border}`,
+    background: theme.card,
+    color: theme.text,
+    cursor: "pointer",
+  };
 }

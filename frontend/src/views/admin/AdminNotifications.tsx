@@ -1,7 +1,6 @@
+// frontend/src/views/admin/AdminNotifications.tsx
 import { useEffect, useMemo, useState } from "react";
-import type { Theme } from "../types";
-
-type AdminProps = { theme: Theme };
+import type { Theme } from "../../types";
 
 type Notification = {
   id: string;
@@ -14,6 +13,7 @@ type Notification = {
 
 type ListResponse = { items?: Notification[] } | Notification[];
 
+// UI preset cards (we store only the key in `color`)
 const COLOR_PRESETS = [
   { key: "fire" as const,   label: "Fire",   preview: "linear-gradient(135deg, #ff416c 0%, #ff4b2b 40%, #ff9966 100%)" },
   { key: "ocean" as const,  label: "Ocean",  preview: "linear-gradient(135deg, #667db6 0%, #0082c8 50%, #00c6ff 100%)" },
@@ -47,9 +47,9 @@ function useIsNarrow(breakpoint = 780) {
   return narrow;
 }
 
-/** Month/day helper for building MM-DD without a year */
+/** Month/day helper for building MM-DD (no year) */
 function daysInMonth(month: number) {
-  if (month === 2) return 29; // allow Feb 29 (no year context)
+  if (month === 2) return 29; // allow Feb 29 since we don't carry year
   return [4, 6, 9, 11].includes(month) ? 30 : 31;
 }
 
@@ -242,42 +242,22 @@ function Chip({
   );
 }
 
-export default function Admin({ theme }: AdminProps) {
-  const isNarrow = useIsNarrow(780);
-
-  // ---- Auth (server-side via /api/admin/login) ----
-  const [pass, setPass] = useState("");
-  const [authed, setAuthed] = useState<boolean>(() => {
+export default function AdminNotifications({ theme }: { theme: Theme }) {
+  // ---- Guard: require login (sessionStorage set by /#admin login) ----
+  const authed = (() => {
     try {
       return sessionStorage.getItem("adminAuthed") === "1";
     } catch {
       return false;
     }
-  });
-  const [authError, setAuthError] = useState("");
+  })();
+  if (!authed) {
+    // bounce back to admin home (which has the login form)
+    window.location.hash = "#admin";
+    return null;
+  }
 
-  const submitLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError("");
-    try {
-      const r = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: pass }),
-      });
-      const j = await r.json().catch(() => ({}));
-      if (r.ok && j?.ok) {
-        try {
-          sessionStorage.setItem("adminAuthed", "1");
-        } catch {}
-        setAuthed(true);
-      } else {
-        setAuthError(j?.error || "Feil passord.");
-      }
-    } catch {
-      setAuthError("Kunne ikke koble til server.");
-    }
-  };
+  const isNarrow = useIsNarrow(780);
 
   // ---- CRUD ----
   const [loading, setLoading] = useState(false);
@@ -285,7 +265,7 @@ export default function Admin({ theme }: AdminProps) {
   const [items, setItems] = useState<Notification[]>([]);
   const [editing, setEditing] = useState<Notification | null>(null);
 
-  // Form
+  // Form state
   const [text, setText] = useState("");
   const [dates, setDates] = useState<string[]>([]);
   const [month, setMonth] = useState<string>(() =>
@@ -298,23 +278,19 @@ export default function Admin({ theme }: AdminProps) {
   const [end, setEnd] = useState("");
   const [preset, setPreset] = useState<NonNullable<Notification["color"]>>("ocean");
 
-const monthOpts = useMemo(
-  () =>
-    Array.from({ length: 12 }, (_, i) => {
-      const m = i + 1;
-      let label = new Date(2000, i, 1)
-        .toLocaleString("nb-NO", { month: "long" })
-        .replace(/\.$/, "");
-      label = label.charAt(0).toUpperCase() + label.slice(1);
-
-      return {
-        value: String(m).padStart(2, "0"), // still keep numeric value internally
-        label, // only the month name is shown
-      };
-    }),
-  []
-);
-
+  // Capitalized Norwegian month labels (no numbers shown)
+  const monthOpts = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, i) => {
+        const m = i + 1;
+        let label = new Date(2000, i, 1)
+          .toLocaleString("nb-NO", { month: "long" })
+          .replace(/\.$/, "");
+        label = label.charAt(0).toUpperCase() + label.slice(1);
+        return { value: String(m).padStart(2, "0"), label };
+      }),
+    []
+  );
 
   const dayOpts = useMemo(() => {
     const m = Number(month);
@@ -347,9 +323,7 @@ const monthOpts = useMemo(
     }
   };
 
-  useEffect(() => {
-    if (authed) load();
-  }, [authed]);
+  useEffect(() => { load(); }, []);
 
   const resetForm = () => {
     setEditing(null);
@@ -434,38 +408,28 @@ const monthOpts = useMemo(
     }
   };
 
-  // --- Auth gate ---
-  if (!authed) {
-    return (
-      <div style={{ maxWidth: 560, margin: "0 auto", paddingBottom: 24 }}>
-        <h1 style={{ marginBottom: 16, fontSize: 26 }}>Admin</h1>
-        <div style={card(theme)}>
-          <form onSubmit={submitLogin} style={{ display: "grid", gap: 12 }}>
-            <label style={{ fontSize: 14 }}>Passord</label>
-            <Input
-              type="password"
-              value={pass}
-              onChange={setPass}
-              placeholder="Admin-passord"
-              ariaLabel="Admin-passord"
-              theme={theme}
-            />
-            {authError && <div style={{ color: "#e53935", fontSize: 14 }}>{authError}</div>}
-            <Button type="submit" variant="primary" block theme={theme} disabled={!pass.trim()}>
-              Logg inn
-            </Button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  // --- Admin UI ---
   const gridCols = isNarrow ? "1fr" : "1fr 1fr";
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", paddingBottom: 28 }}>
-      <h1 style={{ marginBottom: 16, fontSize: 26 }}>Admin</h1>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <a
+          href="#admin"
+          style={{
+            textDecoration: "none",
+            fontSize: 14,
+            opacity: 0.8,
+            padding: "6px 10px",
+            borderRadius: 10,
+            border: `1px solid ${theme.border}`,
+            background: theme.card,
+            color: theme.text,
+          }}
+        >
+          ← Tilbake
+        </a>
+        <h1 style={{ margin: 0, fontSize: 26 }}>Varsler</h1>
+      </div>
 
       {/* Create / Edit */}
       <div style={{ ...card(theme), marginBottom: 16 }}>
@@ -600,7 +564,7 @@ const monthOpts = useMemo(
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
             {items.map((n) => {
-              const colorKey = (n.color ?? "ocean") as "fire" | "ocean" | "nature"; // <-- avoids angle-bracket type in JSX
+              const colorKey = (n.color ?? "ocean") as "fire" | "ocean" | "nature"; // precompute cast outside JSX
               return (
                 <div
                   key={n.id}
@@ -656,22 +620,6 @@ const monthOpts = useMemo(
             })}
           </div>
         )}
-      </div>
-
-      <div style={{ marginTop: 12, fontSize: 12, opacity: 0.7, display: "flex", gap: 8, flexWrap: "wrap" }}>
-        Innlogget som admin.
-        <Button
-          theme={theme}
-          variant="ghost"
-          onClick={() => {
-            try {
-              sessionStorage.removeItem("adminAuthed");
-            } catch {}
-            setAuthed(false);
-          }}
-        >
-          Logg ut
-        </Button>
       </div>
     </div>
   );
