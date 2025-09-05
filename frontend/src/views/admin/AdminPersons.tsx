@@ -99,20 +99,26 @@ export default function AdminPersons({ theme }: { theme: Theme }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const onSelectAvatar = async (file: File | null) => {
-    if (!file) {
-      setAvatarPreview(null);
-      setAvatarChanged(false);
-      return;
-    }
-    if (!/\.png$/i.test(file.name) && file.type !== "image/png") {
-      alert("Vennligst velg en PNG-fil.");
-      return;
-    }
-    const dataUrl = await fileToDataUrl(file);
-    setAvatarPreview(dataUrl);
+const onSelectAvatar = async (file: File | null) => {
+  if (!file) {
+    setAvatarPreview(null);
+    setAvatarChanged(false);
+    return;
+  }
+  if (!/\.png$/i.test(file.name) && file.type !== "image/png") {
+    alert("Vennligst velg en PNG-fil.");
+    return;
+  }
+
+  try {
+    const resizedDataUrl = await resizeImageToPng(file, 256); // shrink to 256px max
+    setAvatarPreview(resizedDataUrl);
     setAvatarChanged(true);
-  };
+  } catch (err) {
+    console.error("Resize failed", err);
+    alert("Kunne ikke behandle bildet.");
+  }
+};
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -646,6 +652,41 @@ function FileButton({
 }
 
 /* ---------- utils ---------- */
+async function resizeImageToPng(file: File, maxSize = 256): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return reject(new Error("Canvas not supported"));
+
+      // scale down proportionally
+      let { width, height } = img;
+      if (width > height) {
+        if (width > maxSize) {
+          height = Math.round((height * maxSize) / width);
+          width = maxSize;
+        }
+      } else {
+        if (height > maxSize) {
+          width = Math.round((width * maxSize) / height);
+          height = maxSize;
+        }
+      }
+      canvas.width = width;
+      canvas.height = height;
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // export back to PNG data URL
+      resolve(canvas.toDataURL("image/png"));
+    };
+    img.onerror = () => reject(new Error("Image load error"));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+
 function slugFromName(name: string) {
   return (name || "")
     .normalize("NFKD")
