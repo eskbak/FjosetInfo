@@ -166,7 +166,7 @@ export default function AdminHome({ theme }: Props) {
   // Tiles shown ONLY after successful login
   return (
     <div style={{ maxWidth: 900, margin: "0 auto" }}>
-      <h1 style={{ marginBottom: 16 }}>Admin</h1>
+      <h1 style={{ marginBottom: 16, justifyContent: "center", display: "flex" }}>Admin</h1>
       <div
         style={{
           display: "grid",
@@ -174,13 +174,16 @@ export default function AdminHome({ theme }: Props) {
           gap: 16,
         }}
       >
+
+        <div style={card(theme)}>
+          Velkommen til Fjøset Admin! Velg en av seksjonene under for å administrere innholdet på infoskjermen.
+        </div>
         <AdminCard theme={theme} title="Varsler" href="#admin/notifications" desc="Legg til, rediger og slett varsler." />
         <AdminCard theme={theme} title="Personer" href="#admin/persons" desc="Administrer kjente enheter/personer." />
         <AdminCard theme={theme} title="Innstillinger" href="#admin/settings" desc="App-innstillinger og preferanser." />
       </div>
 
-      <div style={{ marginTop: 14, fontSize: 12, opacity: 0.8, display: "flex", gap: 8, flexWrap: "wrap" }}>
-        Innlogget.
+      <div style={{ marginTop: 14, fontSize: 12, opacity: 0.8, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", alignItems: "center" }}>
         <Button
           theme={theme}
           variant="ghost"

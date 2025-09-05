@@ -77,6 +77,8 @@ function Select({
         appearance: "none",
         WebkitAppearance: "none",
         width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
         padding: "14px 16px",
         borderRadius: 12,
         border: `1px solid ${theme.border}`,
@@ -124,6 +126,8 @@ function Input({
       placeholder={placeholder}
       style={{
         width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
         padding: "14px 16px",
         borderRadius: 12,
         border: `1px solid ${theme.border}`,
@@ -166,6 +170,8 @@ function Button({
     width: block ? "100%" : undefined,
     opacity: disabled ? 0.6 : 1,
     transition: "transform 120ms ease",
+    boxSizing: "border-box",
+    maxWidth: "100%",
   };
 
   const variants: Record<string, React.CSSProperties> = {
@@ -411,11 +417,21 @@ export default function AdminNotifications({ theme }: { theme: Theme }) {
   const gridCols = isNarrow ? "1fr" : "1fr 1fr";
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", paddingBottom: 28 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 12px 28px" }}>
+      {/* Header */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr auto 1fr",
+          alignItems: "center",
+          gap: 12,
+          marginBottom: 16,
+        }}
+      >
         <a
           href="#admin"
           style={{
+            justifySelf: "start",
             textDecoration: "none",
             fontSize: 14,
             opacity: 0.8,
@@ -428,7 +444,8 @@ export default function AdminNotifications({ theme }: { theme: Theme }) {
         >
           ← Tilbake
         </a>
-        <h1 style={{ margin: 0, fontSize: 26 }}>Varsler</h1>
+        <h1 style={{ margin: 0, fontSize: 26, justifySelf: "center" }}>Varsler</h1>
+        <div />
       </div>
 
       {/* Create / Edit */}
@@ -448,6 +465,8 @@ export default function AdminNotifications({ theme }: { theme: Theme }) {
               placeholder="Meldingstekst…"
               style={{
                 width: "100%",
+                maxWidth: "100%",
+                boxSizing: "border-box",
                 padding: 14,
                 borderRadius: 12,
                 border: `1px solid ${theme.border}`,
@@ -493,7 +512,7 @@ export default function AdminNotifications({ theme }: { theme: Theme }) {
 
           {/* Color presets */}
           <div style={{ display: "grid", gap: 10 }}>
-            <label style={{ fontSize: 14 }}>Farge (gradient)</label>
+            <label style={{ fontSize: 14 }}>Farge</label>
             <div
               style={{
                 display: "grid",
