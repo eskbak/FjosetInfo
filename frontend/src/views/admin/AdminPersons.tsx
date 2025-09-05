@@ -52,8 +52,11 @@ export default function AdminPersons({ theme }: { theme: Theme }) {
   const [err, setErr] = useState("");
   const [avatarVersion, setAvatarVersion] = useState<Record<string, number>>({});
 
-  // Form (add/edit)
+  // Form visibility & mode
+  const [showForm, setShowForm] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null); // original name when editing
+
+  // Form fields
   const [name, setName] = useState("");
   const [mac, setMac] = useState("");
   const [ip, setIp] = useState("");
@@ -80,6 +83,12 @@ export default function AdminPersons({ theme }: { theme: Theme }) {
     load();
   }, []);
 
+  const openNewForm = () => {
+    resetForm();
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const resetForm = () => {
     setEditingKey(null);
     setName("");
@@ -96,29 +105,30 @@ export default function AdminPersons({ theme }: { theme: Theme }) {
     setIp(p.ips?.[0] ?? "");
     setAvatarPreview(null);
     setAvatarChanged(false);
+    setShowForm(true);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-const onSelectAvatar = async (file: File | null) => {
-  if (!file) {
-    setAvatarPreview(null);
-    setAvatarChanged(false);
-    return;
-  }
-  if (!/\.png$/i.test(file.name) && file.type !== "image/png") {
-    alert("Vennligst velg en PNG-fil.");
-    return;
-  }
+  const onSelectAvatar = async (file: File | null) => {
+    if (!file) {
+      setAvatarPreview(null);
+      setAvatarChanged(false);
+      return;
+    }
+    if (!/\.png$/i.test(file.name) && file.type !== "image/png") {
+      alert("Vennligst velg en PNG-fil.");
+      return;
+    }
 
-  try {
-    const resizedDataUrl = await resizeImageToPng(file, 256); // shrink to 256px max
-    setAvatarPreview(resizedDataUrl);
-    setAvatarChanged(true);
-  } catch (err) {
-    console.error("Resize failed", err);
-    alert("Kunne ikke behandle bildet.");
-  }
-};
+    try {
+      const resizedDataUrl = await resizeImageToPng(file, 256); // shrink to 256px max
+      setAvatarPreview(resizedDataUrl);
+      setAvatarChanged(true);
+    } catch (err) {
+      console.error("Resize failed", err);
+      alert("Kunne ikke behandle bildet.");
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,6 +190,7 @@ const onSelectAvatar = async (file: File | null) => {
 
       await load();
       resetForm();
+      setShowForm(false);
     } catch (e: any) {
       setErr(e?.message || "Kunne ikke lagre person");
     } finally {
@@ -197,7 +208,10 @@ const onSelectAvatar = async (file: File | null) => {
       });
       if (!r.ok) throw new Error(`Server ${r.status}`);
       await load();
-      if (editingKey === personName) resetForm();
+      if (editingKey === personName) {
+        resetForm();
+        setShowForm(false);
+      }
     } catch (e: any) {
       setErr(e?.message || "Kunne ikke slette");
     } finally {
@@ -206,108 +220,124 @@ const onSelectAvatar = async (file: File | null) => {
   };
 
   /* ---------- UI ---------- */
-  const shell = { maxWidth: 1100, margin: "0 auto", paddingBottom: 28 } as const;
+  const shell = { maxWidth: 1100, margin: "0 auto", padding: "0 12px 28px" } as const;
 
   return (
     <div style={shell}>
       {/* Header/Nav */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr auto 1fr",
+          alignItems: "center",
+          gap: 12,
+          marginBottom: 16,
+        }}
+      >
         <a href="#admin" style={pill(theme)}>← Tilbake</a>
-        <h1 style={{ margin: 0, fontSize: 26 }}>Personer</h1>
+        <h1 style={{ margin: 0, fontSize: 26, justifySelf: "center" }}>Personer</h1>
+        <div />
       </div>
 
-      {/* Create / Edit */}
-      <div style={{ ...card(theme), marginBottom: 16 }}>
-        <h2 style={{ margin: 0, marginBottom: 12, fontSize: 18 }}>
-          {editingKey ? `Rediger: ${editingKey}` : "Ny person"}
-        </h2>
+      {/* Collapsible Create / Edit form */}
+      {showForm && (
+        <div style={{ ...card(theme), marginBottom: 16 }}>
+          <h2 style={{ margin: 0, marginBottom: 12, fontSize: 18 }}>
+            {editingKey ? `Rediger: ${editingKey}` : "Ny person"}
+          </h2>
 
-        <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
-          {/* Avatar + Name row */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isNarrow ? "1fr" : "auto 1fr",
-              gap: 14,
-              alignItems: "center",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <AvatarPreview
-                theme={theme}
-                name={name || editingKey || ""}
-                dataUrl={avatarPreview}
-                version={avatarVersion[slugFromName(name || editingKey || "")]}
-              />
-              <FileButton
-                theme={theme}
-                label="Velg PNG"
-                accept="image/png"
-                onSelect={onSelectAvatar}
-              />
-              {avatarPreview && (
-                <Button
-                  variant="ghost"
+          <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
+            {/* Avatar + Name row */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isNarrow ? "1fr" : "auto 1fr",
+                gap: 14,
+                alignItems: "center",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <AvatarPreview
                   theme={theme}
-                  onClick={() => {
-                    setAvatarPreview(null);
-                    setAvatarChanged(false);
-                  }}
-                >
-                  Fjern valgt
-                </Button>
-              )}
+                  name={name || editingKey || ""}
+                  dataUrl={avatarPreview}
+                  version={avatarVersion[slugFromName(name || editingKey || "")]}
+                />
+                <FileButton
+                  theme={theme}
+                  label="Velg PNG"
+                  accept="image/png"
+                  onSelect={onSelectAvatar}
+                />
+                {avatarPreview && (
+                  <Button
+                    variant="ghost"
+                    theme={theme}
+                    onClick={() => {
+                      setAvatarPreview(null);
+                      setAvatarChanged(false);
+                    }}
+                  >
+                    Fjern valgt
+                  </Button>
+                )}
+              </div>
+
+              <div>
+                <label style={labelStyle}>Navn</label>
+                <Input theme={theme} value={name} onChange={setName} placeholder="Navn" />
+              </div>
             </div>
 
-            <div>
-              <label style={labelStyle}>Navn</label>
-              <Input theme={theme} value={name} onChange={setName} placeholder="Navn" />
+            {/* MAC + IP */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr",
+                gap: 12,
+              }}
+            >
+              <div>
+                <label style={labelStyle}>MAC-adresse</label>
+                <Input
+                  theme={theme}
+                  value={mac}
+                  onChange={setMac}
+                  placeholder="aa:bb:cc:dd:ee:ff"
+                />
+              </div>
+              <div>
+                <label style={labelStyle}>IP-adresse</label>
+                <Input theme={theme} value={ip} onChange={setIp} placeholder="192.168.0.1" />
+              </div>
             </div>
-          </div>
 
-          {/* MAC + IP */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr",
-              gap: 12,
-            }}
-          >
-            <div>
-              <label style={labelStyle}>MAC-adresse</label>
-              <Input
+            {/* Errors + Actions */}
+            {err && <div style={{ color: "#e53935", fontSize: 14 }}>{err}</div>}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isNarrow ? "1fr" : "auto auto",
+                gap: 10,
+              }}
+            >
+              <Button type="submit" variant="primary" theme={theme} disabled={saving}>
+                {editingKey ? "Lagre endringer" : "Opprett person"}
+              </Button>
+              <Button
+                variant="ghost"
                 theme={theme}
-                value={mac}
-                onChange={setMac}
-                placeholder="aa:bb:cc:dd:ee:ff"
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>IP-adresse</label>
-              <Input theme={theme} value={ip} onChange={setIp} placeholder="192.168.0.1" />
-            </div>
-          </div>
-
-          {/* Actions */}
-          {err && <div style={{ color: "#e53935", fontSize: 14 }}>{err}</div>}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isNarrow ? "1fr" : "auto auto",
-              gap: 10,
-            }}
-          >
-            <Button type="submit" variant="primary" theme={theme} disabled={saving}>
-              {editingKey ? "Lagre endringer" : "Opprett person"}
-            </Button>
-            {editingKey && (
-              <Button variant="ghost" theme={theme} onClick={resetForm}>
+                onClick={() => {
+                  resetForm();
+                  setShowForm(false);
+                }}
+              >
                 Avbryt
               </Button>
-            )}
-          </div>
-        </form>
-      </div>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* List */}
       <div style={card(theme)}>
@@ -337,6 +367,30 @@ const onSelectAvatar = async (file: File | null) => {
           </div>
         )}
       </div>
+
+      {/* Floating add button */}
+      {!showForm && (
+        <button
+          aria-label="Legg til person"
+          onClick={openNewForm}
+          style={{
+            position: "fixed",
+            right: 20,
+            bottom: 20,
+            padding: "14px 18px",
+            borderRadius: 999,
+            border: "none",
+            background:
+              "linear-gradient(135deg, #0082c8, #00c6ff)",
+            color: "#fff",
+            fontSize: 18,
+            boxShadow: "0 6px 20px rgba(0,0,0,0.25)",
+            cursor: "pointer",
+          }}
+        >
+          +
+        </button>
+      )}
     </div>
   );
 }
@@ -397,6 +451,8 @@ function Input({
       type={type}
       style={{
         width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
         padding: "14px 16px",
         borderRadius: 12,
         border: `1px solid ${theme.border}`,
@@ -435,6 +491,8 @@ function Button({
     cursor: disabled ? "not-allowed" : "pointer",
     opacity: disabled ? 0.6 : 1,
     transition: "transform 120ms ease",
+    boxSizing: "border-box",
+    maxWidth: "100%",
   };
   const variants: Record<string, React.CSSProperties> = {
     default: {},
@@ -536,7 +594,7 @@ function PersonCard({
         Rediger
       </Button>
       <Button theme={theme} variant="danger" onClick={onDelete}>
-        Slett
+        🗑️
       </Button>
     </div>
   );
@@ -632,6 +690,8 @@ function FileButton({
         color: theme.text,
         cursor: "pointer",
         display: "inline-block",
+        boxSizing: "border-box",
+        maxWidth: "100%",
       }}
     >
       {busy ? "Laster…" : label}
@@ -700,7 +760,6 @@ function notifyAvatarUpdated(name: string) {
   } catch {}
 }
 
-
 function slugFromName(name: string) {
   return (name || "")
     .normalize("NFKD")
@@ -714,16 +773,6 @@ function slugFromName(name: string) {
 function normMacInput(s: string) {
   const v = (s || "").trim().toLowerCase().replace(/-/g, ":");
   return /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(v) ? v : "";
-}
-
-async function fileToDataUrl(file: File): Promise<string> {
-  await new Promise((r) => setTimeout(r, 0)); // yield
-  return new Promise<string>((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onerror = () => reject(new Error("File read error"));
-    fr.onload = () => resolve(String(fr.result || ""));
-    fr.readAsDataURL(file);
-  });
 }
 
 async function uploadAvatar(name: string, dataUrl: string) {

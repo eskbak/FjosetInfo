@@ -271,6 +271,9 @@ export default function AdminNotifications({ theme }: { theme: Theme }) {
   const [items, setItems] = useState<Notification[]>([]);
   const [editing, setEditing] = useState<Notification | null>(null);
 
+  // Form visibility
+  const [showForm, setShowForm] = useState(false);
+
   // Form state
   const [text, setText] = useState("");
   const [dates, setDates] = useState<string[]>([]);
@@ -342,6 +345,12 @@ export default function AdminNotifications({ theme }: { theme: Theme }) {
     setPreset("ocean");
   };
 
+  const openNewForm = () => {
+    resetForm();
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const startEdit = (n: Notification) => {
     setEditing(n);
     setText(n.text || "");
@@ -349,6 +358,8 @@ export default function AdminNotifications({ theme }: { theme: Theme }) {
     setStart(n.start || "");
     setEnd(n.end || "");
     setPreset((n.color as any) || "ocean");
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -389,6 +400,7 @@ export default function AdminNotifications({ theme }: { theme: Theme }) {
       }
       await load();
       resetForm();
+      setShowForm(false);
     } catch (e: any) {
       setError(e?.message || "Kunne ikke lagre varsel");
     } finally {
@@ -406,7 +418,10 @@ export default function AdminNotifications({ theme }: { theme: Theme }) {
       });
       if (!r.ok) throw new Error(`Server ${r.status}`);
       await load();
-      if (editing?.id === id) resetForm();
+      if (editing?.id === id) {
+        resetForm();
+        setShowForm(false);
+      }
     } catch (e: any) {
       setError(e?.message || "Kunne ikke slette varsel");
     } finally {
@@ -448,132 +463,139 @@ export default function AdminNotifications({ theme }: { theme: Theme }) {
         <div />
       </div>
 
-      {/* Create / Edit */}
-      <div style={{ ...card(theme), marginBottom: 16 }}>
-        <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 18 }}>
-          {editing ? "Rediger varsel" : "Nytt varsel"}
-        </h2>
+      {/* Collapsible Create / Edit */}
+      {showForm && (
+        <div style={{ ...card(theme), marginBottom: 16 }}>
+          <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 18 }}>
+            {editing ? "Rediger varsel" : "Nytt varsel"}
+          </h2>
 
-        <form onSubmit={submit} style={{ display: "grid", gap: 16 }}>
-          {/* Text */}
-          <div style={{ display: "grid", gap: 8 }}>
-            <label style={{ fontSize: 14 }}>Tekst</label>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={4}
-              placeholder="Meldingstekst…"
-              style={{
-                width: "100%",
-                maxWidth: "100%",
-                boxSizing: "border-box",
-                padding: 14,
-                borderRadius: 12,
-                border: `1px solid ${theme.border}`,
-                background: theme.card,
-                color: theme.text,
-                fontSize: 16,
-              }}
-            />
-          </div>
-
-          {/* Dates builder */}
-          <div style={{ display: "grid", gap: 10 }}>
-            <label style={{ fontSize: 14 }}>Dato(er)</label>
-            <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr auto", gap: 10 }}>
-              <Select aria-label="Dag" value={day} onChange={setDay} options={dayOpts} theme={theme} />
-              <Select aria-label="Måned" value={month} onChange={setMonth} options={monthOpts} theme={theme} />
-              <Button onClick={addDate} variant="primary" theme={theme}>
-                Legg til dato
-              </Button>
+          <form onSubmit={submit} style={{ display: "grid", gap: 16 }}>
+            {/* Text */}
+            <div style={{ display: "grid", gap: 8 }}>
+              <label style={{ fontSize: 14 }}>Tekst</label>
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={4}
+                placeholder="Meldingstekst…"
+                style={{
+                  width: "100%",
+                  maxWidth: "100%",
+                  boxSizing: "border-box",
+                  padding: 14,
+                  borderRadius: 12,
+                  border: `1px solid ${theme.border}`,
+                  background: theme.card,
+                  color: theme.text,
+                  fontSize: 16,
+                }}
+              />
             </div>
 
-            {/* Chips */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {dates.length === 0 ? (
-                <div style={{ opacity: 0.7, fontSize: 14 }}>Ingen datoer lagt til ennå.</div>
-              ) : (
-                dates.map((d) => <Chip key={d} label={d} onRemove={() => removeDate(d)} theme={theme} />)
-              )}
-            </div>
-          </div>
+            {/* Dates builder */}
+            <div style={{ display: "grid", gap: 10 }}>
+              <label style={{ fontSize: 14 }}>Dato(er)</label>
+              <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr auto", gap: 10 }}>
+                <Select aria-label="Dag" value={day} onChange={setDay} options={dayOpts} theme={theme} />
+                <Select aria-label="Måned" value={month} onChange={setMonth} options={monthOpts} theme={theme} />
+                <Button onClick={addDate} variant="primary" theme={theme}>
+                  Legg til dato
+                </Button>
+              </div>
 
-          {/* Time window */}
-          <div style={{ display: "grid", gap: 10 }}>
-            <label style={{ fontSize: 14 }}>Tidsrom (valgfritt)</label>
-            <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr", gap: 10 }}>
-              <Input type="time" value={start} onChange={setStart} placeholder="Start HH:MM" ariaLabel="Starttid" theme={theme} />
-              <Input type="time" value={end} onChange={setEnd} placeholder="Slutt HH:MM" ariaLabel="Sluttid" theme={theme} />
+              {/* Chips */}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {dates.length === 0 ? (
+                  <div style={{ opacity: 0.7, fontSize: 14 }}>Ingen datoer lagt til ennå.</div>
+                ) : (
+                  dates.map((d) => <Chip key={d} label={d} onRemove={() => removeDate(d)} theme={theme} />)
+                )}
+              </div>
             </div>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>
-              Hvis tomt vises varselet hele dagen. Tidspicker bruker mobilens native «rullehjul».
-            </div>
-          </div>
 
-          {/* Color presets */}
-          <div style={{ display: "grid", gap: 10 }}>
-            <label style={{ fontSize: 14 }}>Farge</label>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: isNarrow ? "1fr" : `repeat(${COLOR_PRESETS.length}, 1fr)`,
-                gap: 10,
-              }}
-            >
-              {COLOR_PRESETS.map((p) => {
-                const active = preset === p.key;
-                return (
-                  <button
-                    key={p.key}
-                    type="button"
-                    onClick={() => setPreset(p.key)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      padding: 12,
-                      borderRadius: 12,
-                      border: active ? "2px solid #4caf50" : `1px solid ${theme.border}`,
-                      background: theme.card,
-                      color: theme.text,
-                      cursor: "pointer",
-                      fontSize: 16,
-                    }}
-                  >
-                    <span
-                      aria-hidden
+            {/* Time window */}
+            <div style={{ display: "grid", gap: 10 }}>
+              <label style={{ fontSize: 14 }}>Tidsrom (valgfritt)</label>
+              <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr", gap: 10 }}>
+                <Input type="time" value={start} onChange={setStart} placeholder="Start HH:MM" ariaLabel="Starttid" theme={theme} />
+                <Input type="time" value={end} onChange={setEnd} placeholder="Slutt HH:MM" ariaLabel="Sluttid" theme={theme} />
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>
+                Hvis tomt vises varselet hele dagen. Tidspicker bruker mobilens native «rullehjul».
+              </div>
+            </div>
+
+            {/* Color presets */}
+            <div style={{ display: "grid", gap: 10 }}>
+              <label style={{ fontSize: 14 }}>Farge</label>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isNarrow ? "1fr" : `repeat(${COLOR_PRESETS.length}, 1fr)`,
+                  gap: 10,
+                }}
+              >
+                {COLOR_PRESETS.map((p) => {
+                  const active = preset === p.key;
+                  return (
+                    <button
+                      key={p.key}
+                      type="button"
+                      onClick={() => setPreset(p.key)}
                       style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 10,
-                        backgroundImage: p.preview,
-                        border: "none",
-                        flex: "0 0 auto",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        padding: 12,
+                        borderRadius: 12,
+                        border: active ? "2px solid #4caf50" : `1px solid ${theme.border}`,
+                        background: theme.card,
+                        color: theme.text,
+                        cursor: "pointer",
+                        fontSize: 16,
                       }}
-                    />
-                    <span>{p.label}</span>
-                  </button>
-                );
-              })}
+                    >
+                      <span
+                        aria-hidden
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: 10,
+                          backgroundImage: p.preview,
+                          border: "none",
+                          flex: "0 0 auto",
+                        }}
+                      />
+                      <span>{p.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
-          {/* Errors */}
-          {error && <div style={{ color: "#e53935", fontSize: 14 }}>{error}</div>}
+            {/* Errors */}
+            {error && <div style={{ color: "#e53935", fontSize: 14 }}>{error}</div>}
 
-          {/* Actions */}
-          <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "auto auto", gap: 10 }}>
-            <Button type="submit" variant="primary" theme={theme} disabled={loading}>
-              {editing ? "Lagre endringer" : "Opprett varsel"}
-            </Button>
-            {editing && (
-              <Button variant="ghost" theme={theme} onClick={resetForm}>
+            {/* Actions */}
+            <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "auto auto", gap: 10 }}>
+              <Button type="submit" variant="primary" theme={theme} disabled={loading}>
+                {editing ? "Lagre endringer" : "Opprett varsel"}
+              </Button>
+              <Button
+                variant="ghost"
+                theme={theme}
+                onClick={() => {
+                  resetForm();
+                  setShowForm(false);
+                }}
+              >
                 Avbryt
               </Button>
-            )}
-          </div>
-        </form>
-      </div>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Existing list */}
       <div style={card(theme)}>
@@ -640,6 +662,29 @@ export default function AdminNotifications({ theme }: { theme: Theme }) {
           </div>
         )}
       </div>
+
+      {/* Floating add button */}
+      {!showForm && (
+        <button
+          aria-label="Legg til varsel"
+          onClick={openNewForm}
+          style={{
+            position: "fixed",
+            right: 20,
+            bottom: 20,
+            padding: "14px 18px",
+            borderRadius: 999,
+            border: "none",
+            background: "linear-gradient(135deg, #0082c8, #00c6ff)",
+            color: "#fff",
+            fontSize: 18,
+            boxShadow: "0 6px 20px rgba(0,0,0,0.25)",
+            cursor: "pointer",
+          }}
+        >
+          +
+        </button>
+      )}
     </div>
   );
 }

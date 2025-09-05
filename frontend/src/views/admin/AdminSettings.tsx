@@ -67,6 +67,8 @@ function Button({
     width: block ? "100%" : undefined,
     opacity: disabled ? 0.6 : 1,
     transition: "transform 120ms ease",
+    boxSizing: "border-box",
+    maxWidth: "100%",
   };
   const variants: Record<string, React.CSSProperties> = {
     default: {},
@@ -171,6 +173,8 @@ function Select({
         appearance: "none",
         WebkitAppearance: "none",
         width: "100%",
+        maxWidth: "100%",
+        boxSizing: "border-box",
         padding: "14px 16px",
         borderRadius: 12,
         border: `1px solid ${theme.border}`,
@@ -230,6 +234,8 @@ function NumberInput({
         }}
         style={{
           width: "100%",
+          maxWidth: "100%",
+          boxSizing: "border-box",
           padding: "14px 16px",
           borderRadius: 12,
           border: `1px solid ${theme.border}`,
@@ -351,10 +357,20 @@ export default function AdminSettings({ theme }: { theme: Theme }) {
   } as const;
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", paddingBottom: 28 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: "0 12px 28px" }}>
+      {/* Header: back left, title centered */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr auto 1fr",
+          alignItems: "center",
+          gap: 12,
+          marginBottom: 16,
+        }}
+      >
         <a href="#admin" style={pill}>← Tilbake</a>
-        <h1 style={{ margin: 0, fontSize: 26 }}>Innstillinger</h1>
+        <h1 style={{ margin: 0, fontSize: 26, justifySelf: "center" }}>Innstillinger</h1>
+        <div />
       </div>
 
       <div style={{ ...card(theme), marginBottom: 16 }}>
