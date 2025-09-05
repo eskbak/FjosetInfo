@@ -158,6 +158,7 @@ const onSelectAvatar = async (file: File | null) => {
           await uploadAvatar(nm, avatarPreview);
           const slug = slugFromName(nm);
           setAvatarVersion((m) => ({ ...m, [slug]: Date.now() }));
+          notifyAvatarUpdated(nm);
         }
       } else {
         const r = await fetch(`/api/people`, {
@@ -173,6 +174,7 @@ const onSelectAvatar = async (file: File | null) => {
           await uploadAvatar(nm, avatarPreview);
           const slug = slugFromName(nm);
           setAvatarVersion((m) => ({ ...m, [slug]: Date.now() }));
+          notifyAvatarUpdated(nm);
         }
       }
 
@@ -684,6 +686,18 @@ async function resizeImageToPng(file: File, maxSize = 256): Promise<string> {
     img.onerror = () => reject(new Error("Image load error"));
     img.src = URL.createObjectURL(file);
   });
+}
+
+function notifyAvatarUpdated(name: string) {
+  const slug = slugFromName(name);
+  // Broadcast to other tabs/parts of the app
+  try {
+    new BroadcastChannel("avatars").postMessage({ type: "updated", slug });
+  } catch {}
+  // Fallback for environments without BroadcastChannel
+  try {
+    localStorage.setItem(`avatarUpdated:${slug}`, String(Date.now()));
+  } catch {}
 }
 
 
