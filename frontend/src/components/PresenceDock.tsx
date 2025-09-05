@@ -3,10 +3,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import fallbackPng from "../assets/avatars/fallback.png?url";
 
 type Props = {
-  zIndex?: number;     // default 1800 (below ArrivalOverlay)
-  gapPx?: number;      // default -10 (overlap slightly)
-  minSizePx?: number;  // default 150
-  maxSizePx?: number;  // default 220
+  zIndex?: number;
+  gapPx?: number;
+  minSizePx?: number;
+  maxSizePx?: number;
+  refreshMs?: number; // how often to re-fetch avatars (default 10s)
 };
 
 export default function PresenceDock({
@@ -14,20 +15,19 @@ export default function PresenceDock({
   gapPx = -10,
   minSizePx = 150,
   maxSizePx = 220,
+  refreshMs = 10_000,
 }: Props) {
   const [present, setPresent] = useState<string[]>([]);
   const [size, setSize] = useState<number>(minSizePx);
 
-  // Light cache-buster that changes every 30s so new uploads are picked up
-  const [bustTick, setBustTick] = useState<number>(() => Math.floor(Date.now() / 30000));
+  // Re-tick to force avatar refetches even if names don't change
+  const [bustTick, setBustTick] = useState(0);
   useEffect(() => {
-    const id = window.setInterval(() => {
-      setBustTick(Math.floor(Date.now() / 30000));
-    }, 10_000); // check every 10s; tick value only changes every 30s
+    const id = window.setInterval(() => setBustTick((n) => n + 1), refreshMs);
     return () => clearInterval(id);
-  }, []);
+  }, [refreshMs]);
 
-  // poll presence list every 10s
+  // Poll presence list
   useEffect(() => {
     let alive = true;
 
@@ -38,7 +38,6 @@ export default function PresenceDock({
         if (!alive) return;
         const list = Array.isArray(j.present) ? (j.present as string[]) : [];
 
-        // Keep positions stable with a fixed order if desired
         const ORDER = ["Hallgrim", "Eskil", "Sindre", "Skurken", "Niklas", "Marius", "Mina"];
         list.sort((a, b) => {
           const ia = ORDER.indexOf(a);
@@ -47,6 +46,7 @@ export default function PresenceDock({
         });
 
         setPresent(list);
+        setBustTick((n) => n + 1); // force avatar refresh on membership changes
       } catch {
         /* ignore */
       }
@@ -63,7 +63,7 @@ export default function PresenceDock({
   // compute avatar size so n avatars use (almost) full width
   const recomputeSize = () => {
     const n = Math.max(1, present.length);
-    const pad = 0; // no rail padding
+    const pad = 0;
     const w = Math.max(360, window.innerWidth);
     const available = w - pad * 2 - gapPx * (n - 1);
     const s = Math.floor(available / n);
@@ -94,7 +94,7 @@ export default function PresenceDock({
     alignItems: "flex-end",
     gap: gapPx,
     padding: 0,
-    minHeight: size, // sticks up exactly by the image height
+    minHeight: size,
   };
 
   const avatarStyle: React.CSSProperties = {
@@ -113,12 +113,12 @@ export default function PresenceDock({
 
   const avatars = useMemo(
     () =>
-      present.map((name) => {
-        const slug = slugFromName(name);
-        const runtimeUrl = `/avatars/${slug}.png?v=${bustTick}`;
-        return { name, runtimeUrl };
-      }),
-    [present, bustTick]
+      present.map((name) => ({
+        name,
+        // IMPORTANT: runtime files are served from /src/assets/avatars/<slug>.png
+        url: `/src/assets/avatars/${slugFromName(name)}.png`,
+      })),
+    [present]
   );
 
   return (
@@ -128,8 +128,9 @@ export default function PresenceDock({
           <AvatarImg
             key={a.name}
             name={a.name}
-            runtimeUrl={a.runtimeUrl}
+            runtimeUrl={a.url}
             fallbackUrl={fallbackPng}
+            bustTick={bustTick}
             style={avatarStyle}
           />
         ))}
@@ -138,44 +139,57 @@ export default function PresenceDock({
   );
 }
 
-/** Small image component that falls back to bundled fallback.png on error */
+/** Image that bypasses cache by fetching as a Blob with cache:'no-store' */
 function AvatarImg({
   name,
   runtimeUrl,
   fallbackUrl,
+  bustTick,
   style,
 }: {
   name: string;
   runtimeUrl: string;
   fallbackUrl: string;
+  bustTick: number;
   style: React.CSSProperties;
 }) {
-  const [src, setSrc] = useState(runtimeUrl);
-  const triedFallback = useRef(false);
+  const [src, setSrc] = useState<string>(fallbackUrl);
+  const objectUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // when url (and its ?v= cache-buster) changes, try runtime first again
-    triedFallback.current = false;
-    setSrc(runtimeUrl);
-  }, [runtimeUrl]);
+    let cancelled = false;
 
-  return (
-    <img
-      src={src}
-      alt={name}
-      title={name}
-      loading="eager"
-      decoding="async"
-      style={style}
-      onError={() => {
-        // try fallback once
-        if (!triedFallback.current) {
-          triedFallback.current = true;
-          setSrc(fallbackUrl);
+    const load = async () => {
+      try {
+        const r = await fetch(runtimeUrl, { cache: "no-store" });
+        if (!r.ok) throw new Error(String(r.status));
+        const blob = await r.blob();
+        const objUrl = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(objUrl);
+          return;
         }
-      }}
-    />
-  );
+        if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+        objectUrlRef.current = objUrl;
+        setSrc(objUrl);
+      } catch {
+        if (!cancelled) setSrc(fallbackUrl);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [runtimeUrl, fallbackUrl, bustTick]);
+
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
+    };
+  }, []);
+
+  return <img src={src} alt={name} title={name} loading="eager" decoding="async" style={style} />;
 }
 
 function slugFromName(name: string) {
