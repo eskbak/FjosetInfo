@@ -1,35 +1,25 @@
 // components/ArrivalOverlay.tsx
 import { useEffect, useRef, useState } from "react";
-
-// --- OPTIONAL avatar imports (add yours as you create the files) ---
-import eskilPng from "../assets/avatars/eskil.png?url";
-import sindrePng from "../assets/avatars/sindre.png?url";
-import kristianPng from "../assets/avatars/kristian.png?url";
 import fallbackPng from "../assets/avatars/fallback.png?url";
-import niklasPng from "../assets/avatars/niklas.png?url";
-import hallgrimPng from "../assets/avatars/hallgrim.png?url";
-import minaPng from "../assets/avatars/mina.png?url";
 
-// Map of KNOWN_DEVICES name -> avatar image.
-// Update these as you add files (e.g., sindre.png, hallgrim.png, etc.)
-const AVATARS: Record<string, string> = {
-  Eskil: eskilPng,
-  Sindre: sindrePng,
-  Hallgrim: hallgrimPng,
-  Skurken: kristianPng,
-  Niklas: niklasPng,
-  Marius: fallbackPng,
-  Mina: minaPng
-};
+// Small helper: normalize a name into a filename slug
+function slugFromName(name: string) {
+  return (name || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .trim();
+}
 
-// at top of the component file
+// force a good emoji font stack
 const emojiStyle: React.CSSProperties = {
-  // force an emoji font; fall back to system if not available
   fontFamily:
     '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",system-ui,sans-serif',
-  fontWeight: 400,     // avoid bold on emoji (some stacks flake)
-  letterSpacing: 0,    // spacing can break certain multi-codepoint emoji
-  lineHeight: 1,       // tighter baseline for emoji
+  fontWeight: 400,
+  letterSpacing: 0,
+  lineHeight: 1,
   display: "inline-block",
 };
 
@@ -73,32 +63,36 @@ export default function ArrivalOverlay({
     setClosing(true);
     // allow fade-out
     window.setTimeout(() => {
-      try { onClose(); } catch {}
+      try {
+        onClose();
+      } catch {}
     }, 450);
   };
 
   // 🔊 Tell the server to speak (server-side playback on the Pi)
-useEffect(() => {
-  if (!speakOnMount) return;
-  const h = new Date().getHours();
-  if (h < 12 || h >= 22) return; // client-side guard (keep in sync with server env if you change it)
+  useEffect(() => {
+    if (!speakOnMount) return;
+    const h = new Date().getHours();
+    if (h < 12 || h >= 22) return; // client-side guard
 
-  const text = typeof phrase === "function" ? phrase(name) : (phrase || `${name} er hjemme!`);
-  fetch("/api/tts/play", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(voice ? { text, voice } : { text }),
-    keepalive: true,
-  }).catch(() => {});
-}, [name, speakOnMount, phrase, voice]);
-
+    const text =
+      typeof phrase === "function" ? phrase(name) : phrase || `${name} er hjemme!`;
+    fetch("/api/tts/play", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(voice ? { text, voice } : { text }),
+      keepalive: true,
+    }).catch(() => {});
+  }, [name, speakOnMount, phrase, voice]);
 
   // Auto-close + watchdog + Esc to dismiss
   useEffect(() => {
     mainTimerRef.current = window.setTimeout(close, durationMs) as unknown as number;
     watchdogRef.current = window.setTimeout(close, durationMs + 4000) as unknown as number;
 
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
     window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("keydown", onKey);
@@ -107,7 +101,69 @@ useEffect(() => {
     };
   }, [durationMs]);
 
-  const src = avatarSrc || AVATARS[name] || fallbackPng;
+  // -------- Dynamic avatar loader (from /src/assets/avatars/<slug>.png) --------
+  // We fetch as a Blob (cache: 'no-store') and createObjectURL so updates show instantly.
+  const [avatarUrl, setAvatarUrl] = useState<string>(avatarSrc || fallbackPng);
+  const objUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      // If an explicit override was provided, just use it
+      if (avatarSrc) {
+        // revoke previous object URL if any
+        if (objUrlRef.current) {
+          URL.revokeObjectURL(objUrlRef.current);
+          objUrlRef.current = null;
+        }
+        setAvatarUrl(avatarSrc);
+        return;
+      }
+
+      // Try runtime file in your chosen location:
+      // NOTE: You said runtime files are stored under frontend/src/assets/avatars/
+      // In dev, these are served at /src/assets/avatars/<slug>.png
+      const slug = slugFromName(name);
+      const runtimeUrl = `/src/assets/avatars/${slug}.png`;
+
+      try {
+        const r = await fetch(runtimeUrl, { cache: "no-store" });
+        if (!r.ok) throw new Error(String(r.status));
+        const blob = await r.blob();
+        const obj = URL.createObjectURL(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(obj);
+          return;
+        }
+        if (objUrlRef.current) URL.revokeObjectURL(objUrlRef.current);
+        objUrlRef.current = obj;
+        setAvatarUrl(obj);
+      } catch {
+        if (!cancelled) {
+          // fall back to bundled fallback image
+          if (objUrlRef.current) {
+            URL.revokeObjectURL(objUrlRef.current);
+            objUrlRef.current = null;
+          }
+          setAvatarUrl(fallbackPng);
+        }
+      }
+    }
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [name, avatarSrc]);
+
+  // cleanup object URL when unmounting
+  useEffect(() => {
+    return () => {
+      if (objUrlRef.current) URL.revokeObjectURL(objUrlRef.current);
+    };
+  }, []);
 
   return (
     <div
@@ -121,7 +177,9 @@ useEffect(() => {
         cursor: "pointer",
         background:
           "radial-gradient(1200px 600px at 50% -10%, rgba(255,255,255,0.35), transparent 60%), linear-gradient(120deg, #1e1b4b 0%, #7c3aed 50%, #1e1b4b 100%)",
-        animation: closing ? "overlayFadeOut 420ms ease-in forwards" : "overlayFadeIn 420ms ease-out forwards",
+        animation: closing
+          ? "overlayFadeOut 420ms ease-in forwards"
+          : "overlayFadeIn 420ms ease-out forwards",
       }}
       aria-live="polite"
       aria-label={`${name} er hjemme`}
@@ -177,13 +235,14 @@ useEffect(() => {
               position: "absolute",
               inset: "-10%",
               borderRadius: "9999px",
-              background: "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.35), rgba(255,255,255,0.05) 60%, transparent 70%)",
+              background:
+                "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.35), rgba(255,255,255,0.05) 60%, transparent 70%)",
               filter: "blur(8px)",
               animation: closing ? undefined : "pulseHalo 1600ms ease-in-out infinite",
             }}
           />
           <img
-            src={src}
+            src={avatarUrl}
             alt={name}
             title={name}
             style={{
@@ -192,27 +251,28 @@ useEffect(() => {
               objectFit: "contain",
               imageRendering: "auto",
               filter: "drop-shadow(0 8px 22px rgba(0,0,0,0.45))",
-              borderRadius: 16,     // if your PNGs are already masked, you can set this to 0
+              borderRadius: 16, // set to 0 if your PNGs are pre-masked
               animation: closing ? undefined : "avatarPop 600ms cubic-bezier(.2,.8,.2,1)",
               willChange: "transform, filter, opacity",
             }}
             loading="eager"
             decoding="async"
+            onError={() => setAvatarUrl(fallbackPng)}
           />
         </div>
 
-<div
-  style={{
-    fontSize: "clamp(28px, 5.2vw, 56px)",
-    letterSpacing: 1,
-    opacity: 0.95,
-    marginBottom: 6,
-  }}
->
-  <span style={emojiStyle}>🎉</span>
-  &nbsp;Velkommen hjem!&nbsp;
-  <span style={emojiStyle}>🎉</span>
-</div>
+        <div
+          style={{
+            fontSize: "clamp(28px, 5.2vw, 56px)",
+            letterSpacing: 1,
+            opacity: 0.95,
+            marginBottom: 6,
+          }}
+        >
+          <span style={emojiStyle}>🎉</span>
+          &nbsp;Velkommen hjem!&nbsp;
+          <span style={emojiStyle}>🎉</span>
+        </div>
         <div
           style={{
             fontSize: "clamp(44px, 9vw, 96px)",
