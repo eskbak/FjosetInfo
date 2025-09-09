@@ -11,18 +11,19 @@ import AdminHome from "./views/admin/AdminHome";
 import AdminNotifications from "./views/admin/AdminNotifications";
 import AdminPersons from "./views/admin/AdminPersons";
 import AdminSettings from "./views/admin/AdminSettings";
+import DrinksMenu from "./views/DrinksMenu";
 import type { Theme, Colors } from "./types";
 
 // Keep this in sync with server Settings type
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean };
   dayHours: { start: number; end: number }; // end exclusive
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600
 };
 
 const DEFAULT_SETTINGS: Settings = {
-  viewsEnabled: { dashboard: true, news: true, calendar: true },
+  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false },
   dayHours: { start: 6, end: 18 },
   calendarDaysAhead: 5,
   rotateSeconds: 30,
@@ -134,16 +135,24 @@ export default function App() {
   }
   // ---------- END HASH ROUTING ----------
 
-  // ---------- Derive rotation/order from settings ----------
-  type ViewKey = "dashboard" | "news" | "calendar";
+// ---------- Derive rotation/order from settings ----------
+type ViewKey = "dashboard" | "news" | "calendar" | "drinks"; // ⬅️ add "drinks"
 
-  const ORDER: ViewKey[] = useMemo(() => {
-    const list: ViewKey[] = [];
-    if (settings.viewsEnabled.dashboard) list.push("dashboard");
-    if (settings.viewsEnabled.news) list.push("news");
-    if (settings.viewsEnabled.calendar) list.push("calendar");
-    return list.length ? list : ["dashboard"]; // fallback to something
-  }, [settings.viewsEnabled.dashboard, settings.viewsEnabled.news, settings.viewsEnabled.calendar]);
+const ORDER: ViewKey[] = useMemo(() => {
+  // If DrinksMenu is enabled, it takes over the screen exclusively
+  if (settings.viewsEnabled.drinksMenu) return ["drinks"];
+
+  const list: ViewKey[] = [];
+  if (settings.viewsEnabled.dashboard) list.push("dashboard");
+  if (settings.viewsEnabled.news) list.push("news");
+  if (settings.viewsEnabled.calendar) list.push("calendar");
+  return list.length ? list : ["dashboard"]; // fallback
+}, [
+  settings.viewsEnabled.dashboard,
+  settings.viewsEnabled.news,
+  settings.viewsEnabled.calendar,
+  settings.viewsEnabled.drinksMenu, // ⬅️
+]);
 
   const ROTATE_MS = Math.max(5, Math.min(600, settings.rotateSeconds)) * 1000;
   const PRELOAD_MS = 5_000;
@@ -157,19 +166,22 @@ export default function App() {
   const ANNOUNCE_COOLDOWN_MS = 5 * 60 * 1000;
   const POLL_MS = 10_000;
 
-  const pageStyle: React.CSSProperties = {
-    fontFamily: "system-ui, sans-serif",
-    fontSize: "clamp(10px, 2.2vw, 18px)",
-    background: theme.bg,
-    color: theme.text,
-    width: "100vw",
-    height: "100vh",
-    display: "flex",
-    flexDirection: "column",
-    padding: 24,
-    boxSizing: "border-box",
-    willChange: "opacity",
-  };
+    const [view, setView] = useState<ViewKey>(ORDER[0] ?? "dashboard");
+    const drinksMode = settings.viewsEnabled.drinksMenu || view === "drinks";
+
+const pageStyle: React.CSSProperties = {
+  fontFamily: "system-ui, sans-serif",
+  fontSize: "clamp(10px, 2.2vw, 18px)",
+  background: theme.bg,
+  color: theme.text,
+  width: "100vw",
+  height: "100vh",
+  display: "flex",
+  flexDirection: "column",
+  padding: drinksMode ? 0 : 24, // ⬅️ CHANGED
+  boxSizing: "border-box",
+  willChange: "opacity",
+};
 
   const todayNo = useMemo(() => {
     const d = new Date();
@@ -179,8 +191,6 @@ export default function App() {
       .map((p) => (p.type === "month" ? p.value.replace(/\.$/, "") : p.value))
       .join("");
   }, []);
-
-  const [view, setView] = useState<ViewKey>(ORDER[0] ?? "dashboard");
 
   // If ORDER changes (e.g., toggled a view off), keep current view if possible, else fall back
   useEffect(() => {
@@ -307,19 +317,24 @@ export default function App() {
 
   return (
     <div style={pageStyle}>
-      <Header todayText={todayNo} />
+      {!drinksMode && <Header todayText={todayNo} />}  {/* ⬅️ CHANGED */}
 
       {/* Always-on cards */}
-      <NotificationsCard theme={theme} colors={COLORS} isDay={isDay} rotateMs={10_000} />
-      <PresenceDock />
+      {!drinksMode && (
+      <>
+        <NotificationsCard theme={theme} colors={COLORS} isDay={isDay} rotateMs={10_000} />
+        <PresenceDock />
+      </>
+      )}
 
       {/* Rotating views based on settings */}
       {view === "dashboard" && <DashboardView theme={theme} colors={COLORS} isDay={isDay} />}
       {view === "news" && <NewsView theme={theme} colors={COLORS} isDay={isDay} />}
       {view === "calendar" && <CalendarView theme={theme} colors={COLORS} isDay={isDay} />}
+      {view === "drinks" && <DrinksMenu theme={theme} colors={COLORS} />}
 
       {/* Arrival overlay */}
-      {arrivalName && <ArrivalOverlay name={arrivalName} onClose={handleArrivalClosed} />}
+      {!drinksMode && arrivalName && <ArrivalOverlay name={arrivalName} onClose={handleArrivalClosed} />}
 
       {/* dev view switcher */}
       <div
@@ -350,6 +365,9 @@ export default function App() {
           style={btn(theme)}
         >
           Test arrival
+        </button>
+        <button onClick={() => setView("drinks")} style={btn(theme)}>
+          Drinks
         </button>
       </div>
     </div>

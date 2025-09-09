@@ -86,7 +86,7 @@ type NeighborRow = { ip: string; mac: string; state: string };
 
 // ---------------- Settings schema ----------------
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu: boolean };
   dayHours: { start: number; end: number }; // 0..24 (end is exclusive)
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600
@@ -971,8 +971,9 @@ app.put("/api/overlays", (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-// Settings API
+// Settings API (fixed + DrinksMenu single-view mode)
 // ---------------------------------------------------------------------------
+
 function normalizeSettings(input: any, prev?: Settings): Settings {
   const base: Settings = prev ?? readJsonSafe<Settings>(SETTINGS_FILE, DEFAULT_SETTINGS as Settings);
 
@@ -985,12 +986,21 @@ function normalizeSettings(input: any, prev?: Settings): Settings {
   let end = clampInt(dh.end, 1, 24, base.dayHours.end);
   if (end <= start) end = Math.min(24, start + 1);
 
+  // Coerce booleans (also handles missing fields from older files)
+  let outViews = {
+    dashboard: !!v.dashboard,
+    news: !!v.news,
+    calendar: !!v.calendar,
+    drinksMenu: !!v.drinksMenu,
+  };
+
+  // Server-side enforcement: when DrinksMenu is active, disable others
+  if (outViews.drinksMenu) {
+    outViews = { dashboard: false, news: false, calendar: false, drinksMenu: true };
+  }
+
   const out: Settings = {
-    viewsEnabled: {
-      dashboard: !!v.dashboard,
-      news: !!v.news,
-      calendar: !!v.calendar,
-    },
+    viewsEnabled: outViews,
     dayHours: { start, end },
     calendarDaysAhead: clampInt(input?.calendarDaysAhead, 0, 14, base.calendarDaysAhead),
     rotateSeconds: clampInt(input?.rotateSeconds, 5, 600, base.rotateSeconds),
@@ -1008,9 +1018,10 @@ function validateSettings(s: Settings): string[] {
   return errors;
 }
 
-// GET current settings
+// GET current settings (normalize to include missing drinksMenu on legacy files)
 app.get("/api/settings", (_req, res) => {
-  const s = readJsonSafe<Settings>(SETTINGS_FILE, DEFAULT_SETTINGS as Settings);
+  const prev = readJsonSafe<Settings>(SETTINGS_FILE, DEFAULT_SETTINGS as Settings);
+  const s = normalizeSettings(prev, prev);
   res.setHeader("Cache-Control", "no-store");
   res.json(s);
 });
@@ -1034,7 +1045,7 @@ app.put("/api/settings", (req, res) => {
 app.patch("/api/settings", (req, res) => {
   try {
     const prev = readJsonSafe<Settings>(SETTINGS_FILE, DEFAULT_SETTINGS as Settings);
-    const merged = { ...prev, ...(req.body ?? {}) };
+    const merged: any = { ...prev, ...(req.body ?? {}) };
     // Keep nested objects merged properly:
     if (req.body?.viewsEnabled) {
       merged.viewsEnabled = { ...prev.viewsEnabled, ...req.body.viewsEnabled };
@@ -1060,6 +1071,7 @@ app.post("/api/settings/reset", (_req, res) => {
   writeJsonAtomic(SETTINGS_FILE, def);
   res.json({ ok: true, settings: def });
 });
+
 
 // ---------------------------------------------------------------------------
 // OAuth helper (mint a refresh_token once)

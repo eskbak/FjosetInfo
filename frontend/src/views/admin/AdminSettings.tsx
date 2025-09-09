@@ -3,14 +3,14 @@ import { useEffect, useMemo, useState } from "react";
 import type { Theme } from "../../types";
 
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean };
   dayHours: { start: number; end: number }; // end exclusive
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600
 };
 
 const DEFAULTS: Settings = {
-  viewsEnabled: { dashboard: true, news: true, calendar: true },
+  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false },
   dayHours: { start: 6, end: 18 },
   calendarDaysAhead: 5,
   rotateSeconds: 30,
@@ -374,34 +374,70 @@ export default function AdminSettings({ theme }: { theme: Theme }) {
       </div>
 
       <div style={{ ...card(theme), marginBottom: 16 }}>
-        <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 18 }}>Visninger</h2>
-        <div style={{ display: "grid", gap: 10 }}>
-          <Toggle
-            theme={theme}
-            label="Dashboard"
-            checked={settings.viewsEnabled.dashboard}
-            onChange={(v) =>
-              setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, dashboard: v } }))
-            }
-          />
-          <Toggle
-            theme={theme}
-            label="Nyheter"
-            checked={settings.viewsEnabled.news}
-            onChange={(v) =>
-              setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, news: v } }))
-            }
-          />
-          <Toggle
-            theme={theme}
-            label="Kalender"
-            checked={settings.viewsEnabled.calendar}
-            onChange={(v) =>
-              setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, calendar: v } }))
-            }
-          />
-        </div>
-      </div>
+  <h2 style={{ marginTop: 0, marginBottom: 8, fontSize: 18 }}>DrinksMenu</h2>
+  <div style={{ display: "grid", gap: 10 }}>
+    <Toggle
+      theme={theme}
+      label="Aktiver DrinksMenu (deaktiverer andre visninger)"
+      checked={!!settings.viewsEnabled.drinksMenu}
+      onChange={(on) =>
+        setSettings((s) => {
+          if (on) {
+            // Activate DrinksMenu, disable others
+            return { 
+              ...s, 
+              viewsEnabled: { dashboard: false, news: false, calendar: false, drinksMenu: true } 
+            };
+          } else {
+            // Deactivate DrinksMenu, restore to a sensible default (all on)
+            return { 
+              ...s, 
+              viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false } 
+            };
+          }
+        })
+      }
+    />
+    <div style={{ fontSize: 12, opacity: 0.75 }}>
+      Når aktivert, vises kun DrinksMenu i fullskjerm.
+    </div>
+  </div>
+</div>
+
+<div style={{ ...card(theme), marginBottom: 16, opacity: settings.viewsEnabled.drinksMenu ? 0.5 : 1 }}>
+  <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 18 }}>Visninger</h2>
+  <div style={{ display: "grid", gap: 10 }}>
+    <Toggle
+      theme={theme}
+      label="Dashboard"
+      checked={settings.viewsEnabled.dashboard}
+      onChange={(v) =>
+        setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, dashboard: v } }))
+      }
+    />
+    <Toggle
+      theme={theme}
+      label="Nyheter"
+      checked={settings.viewsEnabled.news}
+      onChange={(v) =>
+        setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, news: v } }))
+      }
+    />
+    <Toggle
+      theme={theme}
+      label="Kalender"
+      checked={settings.viewsEnabled.calendar}
+      onChange={(v) =>
+        setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, calendar: v } }))
+      }
+    />
+  </div>
+  {settings.viewsEnabled.drinksMenu && (
+    <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
+      Disse er låst fordi DrinksMenu er aktivert.
+    </div>
+  )}
+</div>
 
       <div style={{ ...card(theme), marginBottom: 16 }}>
         <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 18 }}>Dag / natt</h2>

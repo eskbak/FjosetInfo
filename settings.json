@@ -1,8 +1,9 @@
 {
   "viewsEnabled": {
-    "dashboard": true,
+    "dashboard": false,
     "news": false,
-    "calendar": true
+    "calendar": false,
+    "drinksMenu": true
   },
   "dayHours": {
     "start": 8,
