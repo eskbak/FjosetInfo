@@ -2,6 +2,7 @@
 import type { Theme, Colors } from "../types";
 import placeholderPng from "../assets/drinks/placeholder.png";
 import walkingCow from "../assets/drinks/cowWalking.gif";
+import mjolkerampaLogo from "../assets/drinks/Mjolkerampa.png";
 
 type Drink = {
   name: string;
@@ -16,10 +17,10 @@ export default function DrinksMenu({
   drinks = [
     { name: "AureBrekkeren",  imageUrl: "/assets/drinks/espresso-martini.png", accent: "#ffd27a" },
     { name: "Eskils Revenge", imageUrl: "/assets/drinks/aperol-spritz.png",    accent: "#ffb37a" },
-    { name: "Whisky Sour",    imageUrl: "/assets/drinks/whisky-sour.png",      accent: "#f8e08e" },
-    { name: "Mojito",         imageUrl: "/assets/drinks/mojito.png",           accent: "#86e39b" },
-    { name: "Gin & Tonic",    imageUrl: "/assets/drinks/gt.png",               accent: "#c6f2ff" },
-    { name: "Virgin Mule",    imageUrl: "/assets/drinks/virgin-mule.png",      accent: "#b7f07b" },
+    { name: "Nykkel til Helvete",    imageUrl: "/assets/drinks/whisky-sour.png",      accent: "#f8e08e" },
+    { name: "SinDrekk deg i hjel",         imageUrl: "/assets/drinks/mojito.png",           accent: "#86e39b" },
+    { name: "Grimm'n'Tonic",    imageUrl: "/assets/drinks/gt.png",               accent: "#c6f2ff" },
+    { name: "IngvaldoBomb",    imageUrl: "/assets/drinks/virgin-mule.png",      accent: "#b7f07b" },
   ],
 }: {
   theme: Theme;
@@ -39,26 +40,30 @@ export default function DrinksMenu({
         ["--topbar-h" as any]: topbarH,
       }}
     >
+{/* TOP LOGO */}
+<div style={topBar}>
+  <img
+    src={mjolkerampaLogo}
+    alt="Mjølkerampa logo"
+    style={{
+      maxHeight: "100%",
+      maxWidth: "70%",
+      objectFit: "contain",
+    }}
+  />
+</div>
+
+
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Amatic+SC:wght@700&display=swap');`}</style>
       <style>{css()}</style>
 
       {/* SKY & TEXTURES */}
       <div style={skyGradient} />
-      <div style={sunGlow} />
+      {/* <div style={sunGlow} /> */}
       <div style={woodGrain} />
       <div style={cowSpots} className="dm-noise" />
 
-      {/* TOP BAR
-      <div style={{ ...topBar, height: topbarH }}>
-        <img
-          src={logoUrl}
-          alt="Bar logo"
-          onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
-          style={logoImg}
-        />
-      </div> */}
-
-      {/* LIST (content is above cow) */}
+      {/* LIST */}
       <div style={list}>
         {drinks.slice(0, 6).map((d, i) => (
           <Row key={i} index={i} drink={d} />
@@ -68,8 +73,9 @@ export default function DrinksMenu({
       {/* BOTTOM FIELD */}
       <GrassField />
 
-      {/* COW (behind content) */}
-      <CowWalker />
+      {/* COWS (behind content) */}
+      <CowWalker variant="main" />
+      <CowWalker variant="second" />
     </div>
   );
 }
@@ -91,9 +97,6 @@ function WoodSign({
         transform: `rotate(${alignRight ? -0.6 : 0.6}deg)`,
       }}
     >
-      {/* ropes (auto width; anchored to wrapper corners) */}
-      <div style={{ ...rope, left: 12 }} />
-      <div style={{ ...rope, right: 12 }} />
 
       {/* two planks; width = text width + padding */}
       <div style={signGrid}>
@@ -163,7 +166,6 @@ function Row({ index, drink }: { index: number; drink: Drink }) {
     </div>
   );
 }
-
 
 /* ---------------- SPARKLES ---------------- */
 
@@ -260,6 +262,11 @@ function GrassField() {
     );
   });
 
+  // Small barn SVG, positioned left of center, on the grass
+  const barnX = W * 0.19; // ~20% from left
+  const barnY = baseY + 20; // slightly above top of grass
+  const barnScale = 0.10; // 10% scaling
+
   return (
     <div style={grassWrap} aria-hidden>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={grassSvg}>
@@ -272,21 +279,71 @@ function GrassField() {
             <stop offset="100%" stopColor="#2c5a31" />
           </linearGradient>
         </defs>
+        {/* Blades of grass */}
         {blades}
+        {/* Barn */}
+        <g
+          transform={`translate(${barnX}, ${barnY}) scale(${barnScale})`}
+          style={{ pointerEvents: "none" }}
+        >
+          <rect x="0" y="30" width="100" height="70" fill="#a82d20" stroke="#84231a" strokeWidth="4"/>
+          <polygon points="0,30 50,0 100,30" fill="#d2562d" stroke="#84231a" strokeWidth="4"/>
+          <rect x="40" y="65" width="20" height="35" fill="#fff" stroke="#84231a" strokeWidth="3"/>
+          <circle cx="50" cy="82" r="7" fill="#b4b4b4" />
+          {/* barn doors */}
+          <rect x="45" y="80" width="10" height="20" fill="#fff9ed" stroke="#84231a" strokeWidth="2"/>
+        </g>
       </svg>
     </div>
   );
 }
 
-/* ---------------- SINGLE WALKING COW (behind content) ---------------- */
+/* ---------------- WALKING COWS (behind content) ---------------- */
+// Accepts variant: "main" for original (smaller and lower), "second" for mirrored, even lower
+function CowWalker({variant = "main"}: {variant?: "main" | "second"}) {
+  // Use different styles based on variant
+  const base: React.CSSProperties = {
+    position: "absolute",
+    width: "auto",
+    imageRendering: "auto",
+    filter: "drop-shadow(0 8px 18px rgba(0,0,0,0.35))",
+    willChange: "transform",
+    pointerEvents: "none",
+    zIndex: 3,
+  };
 
-function CowWalker() {
+  if (variant === "main") {
+    // Smaller, lower than before
+    return (
+      <img
+        src={walkingCow}
+        alt="Walking cow"
+        className="cow-walk"
+        style={{
+          ...base,
+          height: "17vh",
+          bottom: "4vh",
+          animation: "cow-walk 23s linear infinite",
+        }}
+      />
+    );
+  }
+  // Second cow: mirrored (left-to-right), even lower, smaller, and in front of the barn
   return (
     <img
       src={walkingCow}
       alt="Walking cow"
-      className="cow-walk"
-      style={cowImg}
+      className="cow-walk cow-walk-right"
+      style={{
+        ...base,
+        height: "13vh",
+        bottom: "1.5vh",
+        left: 0,
+        transform: "scaleX(-1)", // mirror
+        animation: "cow-walk-right 29s linear infinite",
+        zIndex: 3,
+        opacity: 0.93, // slightly faded so doesn't distract
+      }}
     />
   );
 }
@@ -310,7 +367,7 @@ const wrap: React.CSSProperties = {
 const skyGradient: React.CSSProperties = {
   position: "absolute",
   inset: 0,
-  background: "linear-gradient(180deg, #2b4b73 0%, #3e6ba1 32%, #74a6d4 60%, #e9e0cf 100%)",
+  background: "linear-gradient(180deg, #092241ff 0%, #143b69ff 32%, #2c5c8aff 60%, #06093bff 100%)",
   zIndex: 0,
 };
 
@@ -322,7 +379,7 @@ const sunGlow: React.CSSProperties = {
   width: "80vh",
   height: "80vh",
   borderRadius: "50%",
-  background: "radial-gradient(circle, rgba(255,223,158,0.35), transparent 60%)",
+  background: "radial-gradient(circle, rgba(90, 69, 28, 0.35), transparent 60%)",
   filter: "blur(20px)",
   zIndex: 0,
 };
@@ -346,40 +403,6 @@ const cowSpots: React.CSSProperties = {
     "radial-gradient(circle at 70% 80%, rgba(0,0,0,0.05), transparent 40%)",
   mixBlendMode: "multiply",
   zIndex: 0,
-};
-
-const topBar: React.CSSProperties = {
-  position: "relative",
-  zIndex: 5,
-  display: "flex",
-  alignItems: "center",
-  gap: 14,
-  marginBottom: "clamp(6px, 1.2vw, 14px)",
-};
-
-const logoImg: React.CSSProperties = {
-  height: "clamp(32px, 5.6vw, 64px)",
-  width: "auto",
-  objectFit: "contain",
-  filter: "drop-shadow(0 2px 6px rgba(0,0,0,.25))",
-};
-
-const title: React.CSSProperties = {
-  position: "relative",
-  margin: 0,
-  fontSize: "clamp(36px, 6.2vw, 88px)",
-  letterSpacing: 1.5,
-  color: "#f9f5ef",
-  textShadow: "0 2px 0 rgba(0,0,0,0.25)",
-};
-
-const shine: React.CSSProperties = {
-  position: "absolute",
-  inset: 0,
-  background: "linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.35) 40%, transparent 60%)",
-  mixBlendMode: "soft-light",
-  pointerEvents: "none",
-  borderRadius: 6,
 };
 
 const list: React.CSSProperties = {
@@ -411,6 +434,15 @@ const imgWrap: React.CSSProperties = {
   zIndex: 4,
 };
 
+const topBar: React.CSSProperties = {
+  position: "relative",
+  height: "var(--topbar-h)",
+  display: "grid",
+  placeItems: "center",
+  zIndex: 5,
+  marginBottom: "clamp(8px, 1.5vh, 16px)",
+};
+
 function imgGlow(accent: string): React.CSSProperties {
   return {
     position: "absolute",
@@ -423,7 +455,7 @@ function imgGlow(accent: string): React.CSSProperties {
 }
 
 const img: React.CSSProperties = {
-  height: "calc((100vh - var(--topbar-h) - (2 * var(--vpad))) / 6 * 0.80)",
+  height: "calc((100vh - var(--topbar-h) - (2 * var(--vpad))) / 6 * 0.75)",
   width: "auto",
   objectFit: "contain",
   filter: "drop-shadow(0 18px 34px rgba(0,0,0,0.35))",
@@ -436,7 +468,6 @@ const textWrap: React.CSSProperties = {
   minWidth: 0,
   zIndex: 4,
 };
-
 
 /* ---------- wooden sign styles ---------- */
 
@@ -466,14 +497,14 @@ const signGrid: React.CSSProperties = {
   position: "relative",
   display: "grid",
   gridTemplateRows: "1fr 1fr",
-  rowGap: 2,                              // tiny separation between planks
+  rowGap: 2,
   alignItems: "stretch",
-  width: "fit-content",                   // <-- key
-  padding: "0",                           // padding built into planks
-  // Horizontal padding applied via CSS var for both planks
+  width: "fit-content",
+  padding: "0",
+  // Responsive horizontal and vertical paddings for plank size
   // @ts-ignore
-  ["--padX" as any]: "110px",
-  ["--padY" as any]: "16px",
+  ["--padX" as any]: "clamp(46px, 14vw, 200px)",
+  ["--padY" as any]: "clamp(8px, 1.9vh, 30px)",
 };
 
 // Realistic wood textures per plank (slightly different tones)
@@ -484,7 +515,6 @@ const commonPlank: React.CSSProperties = {
   border: "1px solid rgba(0,0,0,0.3)",
   boxShadow:
     "inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -1px 0 rgba(0,0,0,0.2), 0 8px 20px rgba(0,0,0,0.35)",
-  // keep width tight to content
   width: "fit-content",
 };
 
@@ -511,9 +541,9 @@ const signText: React.CSSProperties = {
   pointerEvents: "none",
   color: "#fff3e4",
   textShadow: "0 2px 0 rgba(0,0,0,0.35)",
-  fontSize: "clamp(24px, 3.6vh, 52px)",
+  fontSize: "clamp(18px, 2.3vw, 48px)",
   letterSpacing: 0.6,
-  padding: "0 8px", // slight breathing space visually
+  padding: "0 8px",
 };
 
 // Nails for the corners
@@ -525,7 +555,6 @@ const nail: React.CSSProperties = {
   background: "radial-gradient(circle, #d7d7d7 30%, #9a9a9a 70%)",
   boxShadow: "0 1px 0 rgba(0,0,0,0.4)",
 };
-
 
 /* ---------- farm details ---------- */
 
@@ -545,21 +574,6 @@ const grassSvg: React.CSSProperties = {
   width: "100%",
   height: "100%",
   display: "block",
-};
-
-/* ---------- walking cow (behind content) ---------- */
-
-const cowImg: React.CSSProperties = {
-  position: "absolute",
-  bottom: "7.2vh",
-  height: "24vh",
-  width: "auto",
-  imageRendering: "auto",
-  filter: "drop-shadow(0 8px 18px rgba(0,0,0,0.35))",
-  willChange: "transform",
-  animation: "cow-walk 25s linear infinite",
-  zIndex: 3, // under list (4) and topBar (5); above grass (2)
-  pointerEvents: "none",
 };
 
 /* ---------- helpers ---------- */
@@ -597,6 +611,11 @@ function css() {
   @keyframes cow-walk {
     0%   { transform: translateX(-30vw) }
     100% { transform: translateX(130vw) }
+  }
+  /* Second cow: walks right-to-left (mirrored) */
+  @keyframes cow-walk-right {
+    0%   { transform: scaleX(-1) translateX(-130vw) }
+    100% { transform: scaleX(-1) translateX(30vw) }
   }
 
   @keyframes dm-enter {
