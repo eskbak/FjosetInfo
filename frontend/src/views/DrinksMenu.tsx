@@ -3,6 +3,12 @@ import type { Theme, Colors } from "../types";
 import placeholderPng from "../assets/drinks/placeholder.png";
 import walkingCow from "../assets/drinks/cowWalking.gif";
 import mjolkerampaLogo from "../assets/drinks/Mjolkerampa.png";
+import nykkelTilHelvete from "../assets/drinks/nykkelTilHelvete.png";
+import ingvaldoBomb from "../assets/drinks/ingvaldoBomb.png";
+import sinDrekk from "../assets/drinks/sinDrekk.png";
+import brekkeren from "../assets/drinks/brekkeren.png";
+import grimmTonic from "../assets/drinks/grimmTonic.png";
+import eskilluminati from "../assets/drinks/eskilluminati.png";
 
 type Drink = {
   name: string;
@@ -15,12 +21,12 @@ export default function DrinksMenu({
   colors,
   logoUrl = "/assets/bar-logo.svg",
   drinks = [
-    { name: "AureBrekkeren",  imageUrl: "/assets/drinks/espresso-martini.png", accent: "#ffd27a" },
-    { name: "Eskils Revenge", imageUrl: "/assets/drinks/aperol-spritz.png",    accent: "#ffb37a" },
-    { name: "Nykkel til Helvete",    imageUrl: "/assets/drinks/whisky-sour.png",      accent: "#f8e08e" },
-    { name: "SinDrekk deg i hjel",         imageUrl: "/assets/drinks/mojito.png",           accent: "#86e39b" },
-    { name: "Grimm'n'Tonic",    imageUrl: "/assets/drinks/gt.png",               accent: "#c6f2ff" },
-    { name: "IngvaldoBomb",    imageUrl: "/assets/drinks/virgin-mule.png",      accent: "#b7f07b" },
+    { name: "AureBrekker'n",  imageUrl: brekkeren, accent: "#ffd27a" },
+    { name: "EskIlluminati", imageUrl: eskilluminati,    accent: "#ffb37a" },
+    { name: "Nykkel til Helvete",    imageUrl: nykkelTilHelvete,      accent: "#f8e08e" },
+    { name: "SinDrekk deg i hjel",         imageUrl: sinDrekk,           accent: "#86e39b" },
+    { name: "Grimm'n'Tonic",    imageUrl: grimmTonic,               accent: "#c6f2ff" },
+    { name: "Ingvaldo-Bomb",    imageUrl: ingvaldoBomb,      accent: "#b7f07b" },
   ],
 }: {
   theme: Theme;
@@ -130,7 +136,7 @@ function Row({ index, drink }: { index: number; drink: Drink }) {
   const Img = (
     <div className="dm-float" style={{ ...imgWrap }}>
       <div style={imgGlow(accent)} />
-      <img src={placeholderPng} alt={drink.name} style={img} />
+      <img src={drink.imageUrl} alt={drink.name} style={img} />
     </div>
   );
 
@@ -408,10 +414,9 @@ const cowSpots: React.CSSProperties = {
 const list: React.CSSProperties = {
   position: "relative",
   zIndex: 4, // content ABOVE cow
-  height: "calc(90vh - var(--topbar-h) - (2 * var(--vpad)))",
   display: "grid",
   gridTemplateRows: "repeat(6, 1fr)",
-  gap: "clamp(2px, 0.7vh, 8px)",
+  paddingTop: "300px",
 };
 
 const rowBase: React.CSSProperties = {
@@ -419,7 +424,7 @@ const rowBase: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: "clamp(12px, 3.2vw, 36px)",
-  padding: "0 clamp(8px, 2vw, 28px)",
+  padding: "0 25px",
   // no space-between — we cluster to one side via justifyContent in Row()
   animation: "dm-enter 0.56s cubic-bezier(.2,.65,.2,1) both",
 };
@@ -455,7 +460,7 @@ function imgGlow(accent: string): React.CSSProperties {
 }
 
 const img: React.CSSProperties = {
-  height: "calc((100vh - var(--topbar-h) - (2 * var(--vpad))) / 6 * 0.75)",
+  height: "180px",
   width: "auto",
   objectFit: "contain",
   filter: "drop-shadow(0 18px 34px rgba(0,0,0,0.35))",
@@ -475,21 +480,10 @@ const textWrap: React.CSSProperties = {
 const signWrap: React.CSSProperties = {
   position: "relative",
   display: "inline-block",
-  paddingTop: 22,          // room for ropes
+  paddingTop: 0,          // room for ropes
   width: "fit-content",    // <-- key: shrink to content
   whiteSpace: "nowrap",    // keep single line (change if you want wrapping)
   zIndex: 4,
-};
-
-// Two ropes hanging down from top edge
-const rope: React.CSSProperties = {
-  position: "absolute",
-  top: 0,
-  width: 2,
-  height: 22,
-  background: "linear-gradient(180deg, #c6a377, #8c6b43)",
-  boxShadow: "0 0 2px rgba(0,0,0,0.25)",
-  borderRadius: 2,
 };
 
 // Grid container holding two planks; width = text + padding via fit-content
@@ -500,18 +494,17 @@ const signGrid: React.CSSProperties = {
   rowGap: 2,
   alignItems: "stretch",
   width: "fit-content",
-  padding: "0",
   // Responsive horizontal and vertical paddings for plank size
   // @ts-ignore
-  ["--padX" as any]: "clamp(46px, 14vw, 200px)",
-  ["--padY" as any]: "clamp(8px, 1.9vh, 30px)",
+  ["--padX" as any]: "250px",
+  ["--padY" as any]: "25px",
 };
 
 // Realistic wood textures per plank (slightly different tones)
 const commonPlank: React.CSSProperties = {
   position: "relative",
   padding: "var(--padY) var(--padX)",
-  borderRadius: 8,
+  borderRadius: 15,
   border: "1px solid rgba(0,0,0,0.3)",
   boxShadow:
     "inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -1px 0 rgba(0,0,0,0.2), 0 8px 20px rgba(0,0,0,0.35)",
@@ -541,7 +534,7 @@ const signText: React.CSSProperties = {
   pointerEvents: "none",
   color: "#fff3e4",
   textShadow: "0 2px 0 rgba(0,0,0,0.35)",
-  fontSize: "clamp(18px, 2.3vw, 48px)",
+  fontSize: "80px",
   letterSpacing: 0.6,
   padding: "0 8px",
 };
