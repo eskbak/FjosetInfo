@@ -23,7 +23,7 @@ export default function DrinksMenu({
   drinks = [
     { name: "AureBrekker'n",  imageUrl: brekkeren, accent: "#ffd27a" },
     { name: "EskIlluminati", imageUrl: eskilluminati,    accent: "#ffb37a" },
-    { name: "Nykkel til Helvete",    imageUrl: nykkelTilHelvete,      accent: "#f8e08e" },
+    { name: "Nykkelen til Helvete",    imageUrl: nykkelTilHelvete,      accent: "#f8e08e" },
     { name: "SinDrekk deg i hjel",         imageUrl: sinDrekk,           accent: "#86e39b" },
     { name: "Grimm'n'Tonic",    imageUrl: grimmTonic,               accent: "#c6f2ff" },
     { name: "Ingvaldo-Bomb",    imageUrl: ingvaldoBomb,      accent: "#b7f07b" },
@@ -53,7 +53,7 @@ export default function DrinksMenu({
     alt="Mjølkerampa logo"
     style={{
       maxHeight: "100%",
-      maxWidth: "70%",
+      maxWidth: "65%",
       objectFit: "contain",
     }}
   />
@@ -210,7 +210,7 @@ function Sparkles() {
 
 function GrassField() {
   const W = 1200;
-  const H = 500;
+  const H = 300;
 
   const baseY = 140;
   const amp1 = 16;
@@ -248,6 +248,7 @@ function GrassField() {
     const x = t * W;
     const y =
       baseY +
+      15 +
       amp1 * Math.sin(t * Math.PI * 2 * freq1) +
       amp2 * Math.sin(t * Math.PI * 2 * freq2 + Math.PI / 3);
     const h = 6 + Math.random() * 6; // 6–12px
@@ -271,7 +272,7 @@ function GrassField() {
   // Small barn SVG, positioned left of center, on the grass
   const barnX = W * 0.19; // ~20% from left
   const barnY = baseY + 20; // slightly above top of grass
-  const barnScale = 0.10; // 10% scaling
+  const barnScale = 0.5; // 10% scaling
 
   return (
     <div style={grassWrap} aria-hidden>
@@ -416,7 +417,7 @@ const list: React.CSSProperties = {
   zIndex: 4, // content ABOVE cow
   display: "grid",
   gridTemplateRows: "repeat(6, 1fr)",
-  paddingTop: "300px",
+  paddingTop: "330px",
 };
 
 const rowBase: React.CSSProperties = {
@@ -424,7 +425,7 @@ const rowBase: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: "clamp(12px, 3.2vw, 36px)",
-  padding: "0 25px",
+  padding: "0 20px",
   // no space-between — we cluster to one side via justifyContent in Row()
   animation: "dm-enter 0.56s cubic-bezier(.2,.65,.2,1) both",
 };
