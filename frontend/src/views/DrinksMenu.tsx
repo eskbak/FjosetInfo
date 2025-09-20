@@ -1,4 +1,5 @@
 // frontend/src/views/DrinksMenu.tsx
+import React, { useEffect, useRef, useState } from "react";
 import type { Theme, Colors } from "../types";
 import placeholderPng from "../assets/drinks/placeholder.png";
 import walkingCow from "../assets/drinks/cowWalking.gif";
@@ -38,6 +39,29 @@ export default function DrinksMenu({
   const vpad = "clamp(16px, 3vw, 36px)";
   const topbarH = "clamp(56px, 8vh, 90px)";
 
+  // --- AD STATE ---
+  const [isAd, setIsAd] = useState(false);
+  const [adIndex, setAdIndex] = useState(0);
+  const adTimeoutRef = useRef<number | null>(null);
+  const intervalRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const showAd = () => {
+      setAdIndex((i) => (i + 1) % Math.min(6, drinks.length)); // roter mellom 0–5
+      setIsAd(true);
+      if (adTimeoutRef.current) window.clearTimeout(adTimeoutRef.current);
+      adTimeoutRef.current = window.setTimeout(() => setIsAd(false), 10000); // ~10s
+    };
+
+    // vis reklame hvert 30. sekund
+    intervalRef.current = window.setInterval(showAd, 20000);
+
+    return () => {
+      if (intervalRef.current) window.clearInterval(intervalRef.current);
+      if (adTimeoutRef.current) window.clearTimeout(adTimeoutRef.current);
+    };
+  }, [drinks.length]);
+
   return (
     <div
       style={{
@@ -47,32 +71,30 @@ export default function DrinksMenu({
         ["--topbar-h" as any]: topbarH,
       }}
     >
+      {/* Corner spinning chips */}
+      <img
+        src={spinningChip}
+        alt="Spinning chip"
+        style={{ ...cornerChip, left: "25px" }}
+      />
+      <img
+        src={spinningChip}
+        alt="Spinning chip"
+        style={{ ...cornerChip, right: "25px" }}
+      />
 
-        {/* Corner spinning chips */}
-  <img
-    src={spinningChip}
-    alt="Spinning chip"
-    style={{ ...cornerChip, left: "25px" }}
-  />
-  <img
-    src={spinningChip}
-    alt="Spinning chip"
-    style={{ ...cornerChip, right: "25px" }}
-  />
-
-{/* TOP LOGO */}
-<div style={topBar}>
-  <img
-    src={mjolkerampaLogo}
-    alt="Mjølkerampa logo"
-    style={{
-      maxHeight: "100%",
-      maxWidth: "65%",
-      objectFit: "contain",
-    }}
-  />
-</div>
-
+      {/* TOP LOGO */}
+      <div style={topBar}>
+        <img
+          src={mjolkerampaLogo}
+          alt="Mjølkerampa logo"
+          style={{
+            maxHeight: "100%",
+            maxWidth: "65%",
+            objectFit: "contain",
+          }}
+        />
+      </div>
 
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Amatic+SC:wght@700&display=swap');`}</style>
       <style>{css()}</style>
@@ -83,12 +105,25 @@ export default function DrinksMenu({
       <div style={woodGrain} />
       <div style={cowSpots} className="dm-noise" />
 
-      {/* LIST */}
-      <div style={list}>
-        {drinks.slice(0, 6).map((d, i) => (
-          <Row key={i} index={i} drink={d} />
-        ))}
-      </div>
+      {/* CONTENT STAGE: liste ELLER reklame */}
+      {isAd ? (
+        <div
+          style={{
+            ...list,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <DrinkAd drink={drinks[(adIndex % 6)] || drinks[0]} />
+        </div>
+      ) : (
+        <div style={list}>
+          {drinks.slice(0, 6).map((d, i) => (
+            <Row key={i} index={i} drink={d} />
+          ))}
+        </div>
+      )}
 
       {/* BOTTOM FIELD */}
       <GrassField />
@@ -96,6 +131,28 @@ export default function DrinksMenu({
       {/* COWS (behind content) */}
       <CowWalker variant="main" />
       <CowWalker variant="second" />
+    </div>
+  );
+}
+
+/* ---------------- SIMPLE AD COMPONENT ---------------- */
+
+function DrinkAd({ drink }: { drink: Drink }) {
+  const accent = drink.accent || defaultAccent(0);
+  return (
+    <div className="dm-ad" style={adWrap}>
+      <div className="dm-float" style={adImgWrap}>
+        <div style={imgGlow(accent)} />
+        <img
+          src={drink.imageUrl || placeholderPng}
+          alt={drink.name}
+          style={adImg}
+        />
+      </div>
+      <div style={adTextWrap}>
+        <WoodSign text={drink.name} />
+        <div style={adTagline}>1 Fjøssing = 1 drink</div>
+      </div>
     </div>
   );
 }
@@ -117,7 +174,6 @@ function WoodSign({
         transform: `rotate(${alignRight ? -0.6 : 0.6}deg)`,
       }}
     >
-
       {/* two planks; width = text width + padding */}
       <div style={signGrid}>
         <div style={plankRowTop} />
@@ -150,7 +206,7 @@ function Row({ index, drink }: { index: number; drink: Drink }) {
   const Img = (
     <div className="dm-float" style={{ ...imgWrap }}>
       <div style={imgGlow(accent)} />
-      <img src={drink.imageUrl} alt={drink.name} style={img} />
+      <img src={drink.imageUrl || placeholderPng} alt={drink.name} style={img} />
     </div>
   );
 
@@ -498,6 +554,47 @@ const textWrap: React.CSSProperties = {
   zIndex: 4,
 };
 
+/* ---------- AD styles ---------- */
+
+// med dette:
+const adWrap: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",          // <— stack: bilde over, skilt under
+  alignItems: "center",
+  justifyContent: "flex-start",
+  gap: "clamp(8px, 2.4vh, 24px)",
+  width: "100%",
+  padding: "0 clamp(24px, 4vw, 64px)",
+  height: "100%",                   // <— får vokse vertikalt
+};
+
+// erstatt adImg med en høyere variant
+const adImg: React.CSSProperties = {
+  height: "40vh",  // <— større bilde
+  width: "auto",
+  objectFit: "contain",
+  filter: "drop-shadow(0 24px 44px rgba(0,0,0,0.45))",
+};
+
+// valgfritt: litt spacing under bildet/over teksten
+const adTextWrap: React.CSSProperties = {
+  display: "grid",
+  gap: "12px",
+  placeItems: "center",
+  textAlign: "center",
+  marginTop: "clamp(8px, 1.8vh, 20px)",
+};
+
+const adImgWrap: React.CSSProperties = {
+  ...imgWrap,
+};
+
+const adTagline: React.CSSProperties = {
+  fontSize: "3vh",
+  color: "#e7fbff",
+  textShadow: "0 2px 0 rgba(0,0,0,0.35)",
+};
+
 /* ---------- wooden sign styles ---------- */
 
 // SIGN WRAPPER (auto width)
@@ -623,6 +720,7 @@ function css() {
   .dm-float  { animation: dm-float 4.4s ease-in-out infinite; }
   .dm-spark  { animation: dm-spark 2.2s ease-in-out infinite; }
   .dm-shimmer{ animation: dm-shine 3.2s ease-in-out infinite; }
+  .dm-ad     { animation: ad-in 0.6s cubic-bezier(.2,.65,.2,1) both; }
 
   /* Cow walks fully across viewport: off-screen left to off-screen right */
   @keyframes cow-walk {
@@ -663,6 +761,10 @@ function css() {
   @keyframes blade-sway {
     0%, 100% { transform: rotate(0deg) }
     50%      { transform: rotate(2.5deg) }
+  }
+  @keyframes ad-in {
+    from { opacity: 0; transform: translateY(8px) scale(.98); }
+    to   { opacity: 1; transform: translateY(0)  scale(1); }
   }
   `;
 }
