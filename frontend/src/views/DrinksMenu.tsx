@@ -9,6 +9,7 @@ import sinDrekk from "../assets/drinks/sinDrekk.png";
 import brekkeren from "../assets/drinks/brekkeren.png";
 import grimmTonic from "../assets/drinks/grimmTonic.png";
 import eskilluminati from "../assets/drinks/eskilluminati.png";
+import spinningChip from "../assets/drinks/spinningChip.gif";
 
 type Drink = {
   name: string;
@@ -46,6 +47,19 @@ export default function DrinksMenu({
         ["--topbar-h" as any]: topbarH,
       }}
     >
+
+        {/* Corner spinning chips */}
+  <img
+    src={spinningChip}
+    alt="Spinning chip"
+    style={{ ...cornerChip, left: "25px" }}
+  />
+  <img
+    src={spinningChip}
+    alt="Spinning chip"
+    style={{ ...cornerChip, right: "25px" }}
+  />
+
 {/* TOP LOGO */}
 <div style={topBar}>
   <img
@@ -356,6 +370,15 @@ function CowWalker({variant = "main"}: {variant?: "main" | "second"}) {
 }
 
 /* ---------------- STYLE SYSTEM ---------------- */
+const cornerChip: React.CSSProperties = {
+  position: "absolute",
+  top: "25px",
+  width: "300px",
+  height: "auto",
+  pointerEvents: "none",
+  zIndex: 6,
+  filter: "drop-shadow(0 6px 14px rgba(0,0,0,0.35))",
+};
 
 const wrap: React.CSSProperties = {
   position: "relative",
