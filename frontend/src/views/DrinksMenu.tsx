@@ -27,7 +27,7 @@ export default function DrinksMenu({
     { name: "EskIlluminati", imageUrl: eskilluminati,    accent: "#ffb37a" },
     { name: "Nykkelen til Helvete",    imageUrl: nykkelTilHelvete,      accent: "#f8e08e" },
     { name: "SinDrekk deg i hjel",         imageUrl: sinDrekk,           accent: "#86e39b" },
-    { name: "Grimm'n'Tonic",    imageUrl: grimmTonic,               accent: "#c6f2ff" },
+    { name: "Kaptein Grimmelimm",    imageUrl: grimmTonic,               accent: "#c6f2ff" },
     { name: "Ingvaldo-Bomb",    imageUrl: ingvaldoBomb,      accent: "#b7f07b" },
   ],
 }: {
