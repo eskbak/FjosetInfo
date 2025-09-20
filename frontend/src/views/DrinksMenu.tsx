@@ -44,23 +44,47 @@ export default function DrinksMenu({
   const [adIndex, setAdIndex] = useState(0);
   const adTimeoutRef = useRef<number | null>(null);
   const intervalRef = useRef<number | null>(null);
+  const [adVariant, setAdVariant] = useState<"drink" | "chip">("drink");
+  const adActiveRef = useRef(false);
+  const chipTimeoutRef = useRef<number | null>(null);
 
-  useEffect(() => {
-    const showAd = () => {
-      setAdIndex((i) => (i + 1) % Math.min(6, drinks.length)); // roter mellom 0–5
+useEffect(() => {
+  function startAdSequence() {
+    if (adActiveRef.current) return;       // don't overlap
+    adActiveRef.current = true;
+
+    // 1) DRINK AD (8s)
+    setAdVariant("drink");
+    setAdIndex((i) => (i + 1) % Math.min(6, Math.max(1, drinks.length)));
+    setIsAd(true);
+
+    if (adTimeoutRef.current) window.clearTimeout(adTimeoutRef.current);
+    if (chipTimeoutRef.current) window.clearTimeout(chipTimeoutRef.current);
+
+    adTimeoutRef.current = window.setTimeout(() => {
+      // 2) CHIP AD (5s)
+      setAdVariant("chip");
       setIsAd(true);
-      if (adTimeoutRef.current) window.clearTimeout(adTimeoutRef.current);
-      adTimeoutRef.current = window.setTimeout(() => setIsAd(false), 10000); // ~10s
-    };
 
-    // vis reklame hvert 30. sekund
-    intervalRef.current = window.setInterval(showAd, 20000);
+      chipTimeoutRef.current = window.setTimeout(() => {
+        // 3) Back to list
+        setIsAd(false);
+        adActiveRef.current = false;
+      }, 5000);
+    }, 8000);
+  }
 
-    return () => {
-      if (intervalRef.current) window.clearInterval(intervalRef.current);
-      if (adTimeoutRef.current) window.clearTimeout(adTimeoutRef.current);
-    };
-  }, [drinks.length]);
+  // fire every 30s
+  intervalRef.current = window.setInterval(startAdSequence, 25000);
+
+  return () => {
+    if (intervalRef.current) window.clearInterval(intervalRef.current);
+    if (adTimeoutRef.current) window.clearTimeout(adTimeoutRef.current);
+    if (chipTimeoutRef.current) window.clearTimeout(chipTimeoutRef.current);
+    adActiveRef.current = false;
+  };
+}, [drinks.length]);
+
 
   return (
     <div
@@ -106,24 +130,30 @@ export default function DrinksMenu({
       <div style={cowSpots} className="dm-noise" />
 
       {/* CONTENT STAGE: liste ELLER reklame */}
-      {isAd ? (
-        <div
-          style={{
-            ...list,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <DrinkAd drink={drinks[(adIndex % 6)] || drinks[0]} />
-        </div>
-      ) : (
-        <div style={list}>
-          {drinks.slice(0, 6).map((d, i) => (
-            <Row key={i} index={i} drink={d} />
-          ))}
-        </div>
-      )}
+{isAd ? (
+  <div
+    style={{
+      ...list,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingTop: "300px", // lets the ad use more vertical space
+    }}
+  >
+    {adVariant === "chip" ? (
+      <ChipAd />
+    ) : (
+      <DrinkAd drink={drinks[(adIndex % 6)] || drinks[0]} />
+    )}
+  </div>
+) : (
+  <div style={list}>
+    {drinks.slice(0, 6).map((d, i) => (
+      <Row key={i} index={i} drink={d} />
+    ))}
+  </div>
+)}
+
 
       {/* BOTTOM FIELD */}
       <GrassField />
@@ -150,22 +180,56 @@ function DrinkAd({ drink }: { drink: Drink }) {
         />
       </div>
       <div style={adTextWrap}>
-        <WoodSign text={drink.name} />
+        <WoodSign text={drink.name} size={1.5} />
         <div style={adTagline}>1 Fjøssing = 1 drink</div>
       </div>
     </div>
   );
 }
 
+function ChipAd() {
+  return (
+    <div className="dm-ad" style={adWrap}>
+      <div className="dm-float" style={adImgWrap}>
+        <img src={spinningChip} alt="Fjøssing" style={chipImg} />
+      </div>
+      <div style={adTextWrap}>
+        <div style={bigTagline}>1 Fjøssing = 1 drink</div>
+      </div>
+    </div>
+  );
+}
+
+
+/* ---------------- WOOD SIGN ---------------- */
+
 /* ---------------- WOOD SIGN ---------------- */
 
 function WoodSign({
   text,
   alignRight,
+  size = 1,               // <— NY: skaleringsfaktor
 }: {
   text: string;
   alignRight?: boolean;
+  size?: number;
 }) {
+  const s = size;         // 1 = original, 1.3 = 30% større, osv.
+
+  // Dynamiske overstyringer for skiltets paddings (X/Y) og fontstørrelse
+  const signGridDyn: React.CSSProperties = {
+    ...signGrid,
+    // @ts-ignore
+    ["--padX" as any]: `${250 * s}px`,
+    // @ts-ignore
+    ["--padY" as any]: `${25 * s}px`,
+  };
+
+  const signTextDyn: React.CSSProperties = {
+    ...signText,
+    fontSize: `${80 * s}px`,
+  };
+
   return (
     <div
       style={{
@@ -175,12 +239,12 @@ function WoodSign({
       }}
     >
       {/* two planks; width = text width + padding */}
-      <div style={signGrid}>
+      <div style={signGridDyn}>
         <div style={plankRowTop} />
         <div style={plankRowBot} />
 
         {/* centered label across both planks */}
-        <span style={signText}>{text}</span>
+        <span style={signTextDyn}>{text}</span>
 
         {/* nails (four corners) */}
         <span style={{ ...nail, left: 10, top: 10 }} />
@@ -191,6 +255,7 @@ function WoodSign({
     </div>
   );
 }
+
 
 /* ---------------- ROW ---------------- */
 
@@ -429,7 +494,7 @@ function CowWalker({variant = "main"}: {variant?: "main" | "second"}) {
 const cornerChip: React.CSSProperties = {
   position: "absolute",
   top: "25px",
-  width: "300px",
+  width: "150px",
   height: "auto",
   pointerEvents: "none",
   zIndex: 6,
@@ -555,6 +620,18 @@ const textWrap: React.CSSProperties = {
 };
 
 /* ---------- AD styles ---------- */
+const chipImg: React.CSSProperties = {
+  height: "clamp(340px, 56vh, 40vh)", // bigger than the drink ad
+  width: "auto",
+  objectFit: "contain",
+  filter: "drop-shadow(0 24px 44px rgba(0,0,0,0.45))",
+};
+
+const bigTagline: React.CSSProperties = {
+  fontSize: "6vh",
+  color: "#e7fbff",
+  textShadow: "0 2px 0 rgba(0,0,0,0.35)",
+};
 
 // med dette:
 const adWrap: React.CSSProperties = {
@@ -590,7 +667,7 @@ const adImgWrap: React.CSSProperties = {
 };
 
 const adTagline: React.CSSProperties = {
-  fontSize: "3vh",
+  fontSize: "4vh",
   color: "#e7fbff",
   textShadow: "0 2px 0 rgba(0,0,0,0.35)",
 };
