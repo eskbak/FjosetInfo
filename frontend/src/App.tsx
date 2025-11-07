@@ -4,6 +4,7 @@ import Header from "./components/Header";
 import DashboardView from "./views/DashboardView";
 import NewsView from "./views/NewsView";
 import CalendarView from "./views/CalendarView";
+import HistoryView from "./views/HistoryView";
 import ArrivalOverlay from "./components/ArrivalOverlay";
 import PresenceDock from "./components/PresenceDock";
 import NotificationsCard from "./cards/NotificationsCard";
@@ -17,14 +18,14 @@ import type { Theme, Colors } from "./types";
 
 // Keep this in sync with server Settings type
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean; fjosetRanking?: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean; fjosetRanking?: boolean; history?: boolean };
   dayHours: { start: number; end: number }; // end exclusive
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600
 };
 
 const DEFAULT_SETTINGS: Settings = {
-  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, fjosetRanking: true },
+  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, fjosetRanking: true, history: true },
   dayHours: { start: 6, end: 18 },
   calendarDaysAhead: 5,
   rotateSeconds: 30,
@@ -137,7 +138,7 @@ export default function App() {
   // ---------- END HASH ROUTING ----------
 
 // ---------- Derive rotation/order from settings ----------
-type ViewKey = "dashboard" | "news" | "calendar" | "drinks" | "fjosetRanking"; // ⬅️ add "fjosetRanking"
+type ViewKey = "dashboard" | "news" | "calendar" | "drinks" | "fjosetRanking" | "history";
 
 const ORDER: ViewKey[] = useMemo(() => {
   // If DrinksMenu is enabled, it takes over the screen exclusively
@@ -147,14 +148,16 @@ const ORDER: ViewKey[] = useMemo(() => {
   if (settings.viewsEnabled.dashboard) list.push("dashboard");
   if (settings.viewsEnabled.news) list.push("news");
   if (settings.viewsEnabled.calendar) list.push("calendar");
-  if (settings.viewsEnabled.fjosetRanking) list.push("fjosetRanking"); // ⬅️
+  if (settings.viewsEnabled.fjosetRanking) list.push("fjosetRanking");
+  if (settings.viewsEnabled.history) list.push("history");
   return list.length ? list : ["dashboard"]; // fallback
 }, [
   settings.viewsEnabled.dashboard,
   settings.viewsEnabled.news,
   settings.viewsEnabled.calendar,
-  settings.viewsEnabled.drinksMenu, // ⬅️
-  settings.viewsEnabled.fjosetRanking, // ⬅️
+  settings.viewsEnabled.drinksMenu,
+  settings.viewsEnabled.fjosetRanking,
+  settings.viewsEnabled.history,
 ]);
 
   const ROTATE_MS = Math.max(5, Math.min(600, settings.rotateSeconds)) * 1000;
@@ -341,6 +344,7 @@ const pageStyle: React.CSSProperties = {
       {view === "news" && <NewsView theme={theme} colors={COLORS} isDay={isDay} />}
       {view === "calendar" && <CalendarView theme={theme} colors={COLORS} isDay={isDay} />}
       {view === "fjosetRanking" && <FjosetRankingView />}
+      {view === "history" && <HistoryView theme={theme} colors={COLORS} isDay={isDay} />}
       {view === "drinks" && <DrinksMenu theme={theme} colors={COLORS} />}
 
       {/* Arrival overlay */}

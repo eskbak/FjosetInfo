@@ -86,7 +86,7 @@ type NeighborRow = { ip: string; mac: string; state: string };
 
 // ---------------- Settings schema ----------------
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu: boolean; fjosetRanking: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu: boolean; fjosetRanking: boolean; history: boolean };
   dayHours: { start: number; end: number }; // 0..24 (end is exclusive)
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600
@@ -263,6 +263,214 @@ app.get("/api/entur/departures", async (req: Request, res: Response) => {
     return res.json({
       stopPlace: { id: "NSR:StopPlace:42404", name: "Test Stop" },
       departures: mockDepartures,
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// This Day in History (Wikipedia API - Norwegian)
+// ---------------------------------------------------------------------------
+let historyCached: { date: string; facts: any[]; fetchedDate: string } | null = null as { date: string; facts: any[]; fetchedDate: string } | null;
+
+app.get("/api/history", async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const todayKey = now.toISOString().split('T')[0]; // YYYY-MM-DD
+    
+    // Allow clearing cache with ?refresh=1
+    const refresh = req.query.refresh === '1';
+    if (refresh) {
+      console.log('Cache cleared by request');
+      historyCached = null;
+    }
+    
+    // Return cached data if it's from today
+    if (historyCached && historyCached.fetchedDate === todayKey) {
+      console.log('Returning cached history data');
+      return res.json({
+        date: historyCached.date,
+        facts: historyCached.facts,
+      });
+    }
+    
+    console.log('Fetching fresh history data...');
+    
+    // Use "Wikipedia:Dagen_i_dag" page which has "Norsk historie" section
+    const pageTitle = "Wikipedia:Dagen_i_dag";
+    const url = `https://no.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(pageTitle)}&prop=text&format=json&origin=*`;
+    
+    console.log(`Fetching Norwegian Wikipedia: ${pageTitle}`);
+    
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": ET_CLIENT_NAME,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Wikipedia API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (data.error) {
+      console.log(`Wikipedia returned error: ${data.error.info}`);
+      throw new Error(data.error.info);
+    }
+    
+    // Parse the HTML content to extract events from "Norsk historie" section
+    const html = data.parse?.text?.['*'] || '';
+    console.log(`Got HTML content, length: ${html.length}`);
+    
+    // Try to find "Norsk historie" with different patterns
+    let norskHistorieMatch = html.match(/<span[^>]*id="Norsk_historie"[^>]*>.*?<\/span>.*?<\/h3>(.*?)(?=<h[23]|<div class="printfooter"|$)/is);
+    if (!norskHistorieMatch) {
+      norskHistorieMatch = html.match(/<h3[^>]*>.*?Norsk historie.*?<\/h3>(.*?)(?=<h[23]|<div class="printfooter"|$)/is);
+    }
+    
+    if (!norskHistorieMatch) {
+      console.log('Could not find "Norsk historie" section, searching for section markers...');
+      // Log all h3 headers to help debug
+      const headers = html.match(/<h3[^>]*>.*?<\/h3>/gi) || [];
+      console.log('Found headers:', headers.slice(0, 5));
+    } else {
+      console.log('Found "Norsk historie" section');
+    }
+    
+    const sectionHtml = norskHistorieMatch ? norskHistorieMatch[1] : '';
+    console.log(`Section HTML length: ${sectionHtml.length}`);
+    
+    if (sectionHtml.length > 100) {
+      console.log(`First 800 chars of section: ${sectionHtml.substring(0, 800)}`);
+    }
+    
+    // Extract facts from list items
+    const facts: any[] = [];
+    
+    if (sectionHtml.length > 0) {
+      // Look for list items with years
+      const listItemPattern = /<li>(.*?)<\/li>/gi;
+      let liMatch;
+      
+      console.log('Parsing list items...');
+      while ((liMatch = listItemPattern.exec(sectionHtml)) && facts.length < 15) {
+        const itemText = liMatch[1];
+        console.log(`Found list item: ${itemText.substring(0, 200)}`);
+        
+        // Look for pattern: YYYY – text or YYYY: text
+        const yearMatch = itemText.match(/^[^>]*?(\d{4})\s*[–:-]\s*(.*)$/s);
+        if (yearMatch) {
+          const year = parseInt(yearMatch[1]);
+          console.log(`Matched year: ${year}`);
+          let text = yearMatch[2] // This gets everything after the year
+            .replace(/<[^>]+>/g, '') // Remove HTML tags
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&quot;/g, '"')
+            .replace(/&#\d+;/g, '')
+            .replace(/\[[^\]]+\]/g, '') // Remove [edit] links
+            .replace(/\s+/g, ' ') // Normalize whitespace
+            .trim();
+          
+          console.log(`Extracted text (${text.length} chars): ${text.substring(0, 150)}`);
+          
+          if (text && text.length > 15 && text.length < 500 && year > 1000 && year < 2030) {
+            facts.push({
+              year,
+              text,
+              type: "event"
+            });
+            console.log(`✓ Added fact for year ${year}`);
+          } else {
+            console.log(`✗ Rejected: length=${text.length}, year=${year}`);
+          }
+        } else {
+          console.log('No year match found in this item');
+        }
+      }
+    }
+    
+    console.log(`Extracted ${facts.length} facts from Norwegian Wikipedia "Norsk historie"`);
+    
+    // If we got Norwegian data, use it (even just 1 fact is fine)
+    if (facts.length >= 1) {
+      const dateStr = now.toLocaleDateString("nb-NO", { day: "numeric", month: "long" });
+      
+      // Cache the result
+      historyCached = {
+        date: dateStr,
+        facts: facts.slice(0, 10),
+        fetchedDate: todayKey,
+      };
+      
+      return res.json({
+        date: dateStr,
+        facts: facts.slice(0, 10),
+      });
+    }
+    
+    // Otherwise fall back to English REST API
+    console.log(`Not enough Norwegian data (${facts.length}), using English API...`);
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const englishUrl = `https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/${month}/${day}`;
+    const englishResponse = await fetch(englishUrl, {
+      headers: {
+        "User-Agent": ET_CLIENT_NAME,
+        "Accept": "application/json",
+      },
+    });
+    
+    const englishData = await englishResponse.json();
+    const events = (englishData.events || []).slice(0, 5).map((e: any) => ({
+      year: e.year,
+      text: e.text,
+      type: "event",
+    }));
+    
+    const births = (englishData.births || []).slice(0, 3).map((b: any) => ({
+      year: b.year,
+      text: b.text,
+      type: "birth",
+    }));
+    
+    const deaths = (englishData.deaths || []).slice(0, 2).map((d: any) => ({
+      year: d.year,
+      text: d.text,
+      type: "death",
+    }));
+    
+    const all = [...events, ...births, ...deaths];
+    const dateStr = now.toLocaleDateString("nb-NO", { day: "numeric", month: "long" });
+    
+    // Cache the English fallback too
+    historyCached = {
+      date: dateStr,
+      facts: all.length > 0 ? all : [
+        { year: 1905, text: "Norge fikk sin første konge, Haakon VII.", type: "event" },
+        { year: 1814, text: "Norge fikk sin grunnlov 17. mai.", type: "event" },
+        { year: 1828, text: "Henrik Ibsen, norsk forfatter og dramatiker.", type: "birth" },
+      ],
+      fetchedDate: todayKey,
+    };
+    
+    return res.json({
+      date: historyCached.date,
+      facts: historyCached.facts,
+    });
+  } catch (e: any) {
+    console.error("History API failed:", e?.message);
+    const now = new Date();
+    const dateStr = now.toLocaleDateString("nb-NO", { day: "numeric", month: "long" });
+    return res.json({
+      date: dateStr,
+      facts: [
+        { year: 1905, text: "Norge fikk sin første konge, Haakon VII.", type: "event" },
+        { year: 1814, text: "Norge fikk sin grunnlov 17. mai.", type: "event" },
+        { year: 1828, text: "Henrik Ibsen ble født. Norsk forfatter og dramatiker.", type: "birth" },
+        { year: 1863, text: "Edvard Munch ble født. Norsk maler.", type: "birth" },
+        { year: 1872, text: "Roald Amundsen ble født. Norsk polarforsker.", type: "birth" },
+      ],
     });
   }
 });
@@ -993,11 +1201,12 @@ function normalizeSettings(input: any, prev?: Settings): Settings {
     calendar: !!v.calendar,
     drinksMenu: !!v.drinksMenu,
     fjosetRanking: !!v.fjosetRanking,
+    history: !!v.history,
   };
 
   // Server-side enforcement: when DrinksMenu is active, disable others
   if (outViews.drinksMenu) {
-    outViews = { dashboard: false, news: false, calendar: false, drinksMenu: true, fjosetRanking: false };
+    outViews = { dashboard: false, news: false, calendar: false, drinksMenu: true, fjosetRanking: false, history: false };
   }
 
   const out: Settings = {
