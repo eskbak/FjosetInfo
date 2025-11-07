@@ -11,19 +11,20 @@ import AdminHome from "./views/admin/AdminHome";
 import AdminNotifications from "./views/admin/AdminNotifications";
 import AdminPersons from "./views/admin/AdminPersons";
 import AdminSettings from "./views/admin/AdminSettings";
+import FjosetRankingView from "./views/FjosetRankingView";
 import DrinksMenu from "./views/DrinksMenu";
 import type { Theme, Colors } from "./types";
 
 // Keep this in sync with server Settings type
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean; fjosetRanking?: boolean };
   dayHours: { start: number; end: number }; // end exclusive
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600
 };
 
 const DEFAULT_SETTINGS: Settings = {
-  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false },
+  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, fjosetRanking: true },
   dayHours: { start: 6, end: 18 },
   calendarDaysAhead: 5,
   rotateSeconds: 30,
@@ -136,7 +137,7 @@ export default function App() {
   // ---------- END HASH ROUTING ----------
 
 // ---------- Derive rotation/order from settings ----------
-type ViewKey = "dashboard" | "news" | "calendar" | "drinks"; // ⬅️ add "drinks"
+type ViewKey = "dashboard" | "news" | "calendar" | "drinks" | "fjosetRanking"; // ⬅️ add "fjosetRanking"
 
 const ORDER: ViewKey[] = useMemo(() => {
   // If DrinksMenu is enabled, it takes over the screen exclusively
@@ -146,12 +147,14 @@ const ORDER: ViewKey[] = useMemo(() => {
   if (settings.viewsEnabled.dashboard) list.push("dashboard");
   if (settings.viewsEnabled.news) list.push("news");
   if (settings.viewsEnabled.calendar) list.push("calendar");
+  if (settings.viewsEnabled.fjosetRanking) list.push("fjosetRanking"); // ⬅️
   return list.length ? list : ["dashboard"]; // fallback
 }, [
   settings.viewsEnabled.dashboard,
   settings.viewsEnabled.news,
   settings.viewsEnabled.calendar,
   settings.viewsEnabled.drinksMenu, // ⬅️
+  settings.viewsEnabled.fjosetRanking, // ⬅️
 ]);
 
   const ROTATE_MS = Math.max(5, Math.min(600, settings.rotateSeconds)) * 1000;
@@ -183,14 +186,20 @@ const pageStyle: React.CSSProperties = {
   willChange: "opacity",
 };
 
+  // Update date display every minute
+  const [dateTime, setDateTime] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setDateTime(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   const todayNo = useMemo(() => {
-    const d = new Date();
     const fmt = new Intl.DateTimeFormat("nb-NO", { day: "2-digit", month: "short" });
     return fmt
-      .formatToParts(d)
+      .formatToParts(dateTime)
       .map((p) => (p.type === "month" ? p.value.replace(/\.$/, "") : p.value))
       .join("");
-  }, []);
+  }, [dateTime]);
 
   // If ORDER changes (e.g., toggled a view off), keep current view if possible, else fall back
   useEffect(() => {
@@ -331,6 +340,7 @@ const pageStyle: React.CSSProperties = {
       {view === "dashboard" && <DashboardView theme={theme} colors={COLORS} isDay={isDay} />}
       {view === "news" && <NewsView theme={theme} colors={COLORS} isDay={isDay} />}
       {view === "calendar" && <CalendarView theme={theme} colors={COLORS} isDay={isDay} />}
+      {view === "fjosetRanking" && <FjosetRankingView />}
       {view === "drinks" && <DrinksMenu theme={theme} colors={COLORS} />}
 
       {/* Arrival overlay */}

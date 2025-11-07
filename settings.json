@@ -1,9 +1,10 @@
 {
   "viewsEnabled": {
-    "dashboard": false,
-    "news": false,
-    "calendar": false,
-    "drinksMenu": true
+    "dashboard": true,
+    "news": true,
+    "calendar": true,
+    "drinksMenu": false,
+    "fjosetRanking": true
   },
   "dayHours": {
     "start": 8,

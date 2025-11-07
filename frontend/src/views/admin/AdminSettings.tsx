@@ -3,14 +3,14 @@ import { useEffect, useMemo, useState } from "react";
 import type { Theme } from "../../types";
 
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean; fjosetRanking?: boolean };
   dayHours: { start: number; end: number }; // end exclusive
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600
 };
 
 const DEFAULTS: Settings = {
-  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false },
+  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, fjosetRanking: true },
   dayHours: { start: 6, end: 18 },
   calendarDaysAhead: 5,
   rotateSeconds: 30,
@@ -386,13 +386,13 @@ export default function AdminSettings({ theme }: { theme: Theme }) {
             // Activate DrinksMenu, disable others
             return { 
               ...s, 
-              viewsEnabled: { dashboard: false, news: false, calendar: false, drinksMenu: true } 
+              viewsEnabled: { dashboard: false, news: false, calendar: false, drinksMenu: true, fjosetRanking: false } 
             };
           } else {
             // Deactivate DrinksMenu, restore to a sensible default (all on)
-            return { 
-              ...s, 
-              viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false } 
+            return {
+              ...s,
+              viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, fjosetRanking: true }
             };
           }
         })
@@ -429,6 +429,14 @@ export default function AdminSettings({ theme }: { theme: Theme }) {
       checked={settings.viewsEnabled.calendar}
       onChange={(v) =>
         setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, calendar: v } }))
+      }
+    />
+    <Toggle
+      theme={theme}
+      label="Fjøset Ranking"
+      checked={settings.viewsEnabled.fjosetRanking}
+      onChange={(v) =>
+        setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, fjosetRanking: v } }))
       }
     />
   </div>

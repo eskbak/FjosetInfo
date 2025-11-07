@@ -86,7 +86,7 @@ type NeighborRow = { ip: string; mac: string; state: string };
 
 // ---------------- Settings schema ----------------
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu: boolean; fjosetRanking: boolean };
   dayHours: { start: number; end: number }; // 0..24 (end is exclusive)
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600
@@ -992,11 +992,12 @@ function normalizeSettings(input: any, prev?: Settings): Settings {
     news: !!v.news,
     calendar: !!v.calendar,
     drinksMenu: !!v.drinksMenu,
+    fjosetRanking: !!v.fjosetRanking,
   };
 
   // Server-side enforcement: when DrinksMenu is active, disable others
   if (outViews.drinksMenu) {
-    outViews = { dashboard: false, news: false, calendar: false, drinksMenu: true };
+    outViews = { dashboard: false, news: false, calendar: false, drinksMenu: true, fjosetRanking: false };
   }
 
   const out: Settings = {
