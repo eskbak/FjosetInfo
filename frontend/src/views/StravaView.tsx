@@ -50,8 +50,8 @@ export default function StravaView({
       try {
         const r = await fetch(`/api/strava/activities`);
         const data = await r.json();
-        // Only show top 4 activities
-        setActivities((data.activities || []).slice(0, 4));
+        // Only show top 3 activities
+        setActivities((data.activities || []).slice(0, 3));
       } catch (err) {
         console.error("Failed to fetch Strava activities:", err);
       }
@@ -176,12 +176,12 @@ export default function StravaView({
               <div
                 style={{
                   display: "flex",
-                  gap: 35,
+                  gap: 10,
                   flexShrink: 0,
                 }}
               >
-                <div style={{ textAlign: "center", width: "calc(8em * 2.8 / 2)" }}>Distanse</div>
-                <div style={{ textAlign: "center", width: "calc(8em * 2.8 / 2)" }}>Tid</div>
+                <div style={{ textAlign: "center", width: "calc(6em * 2.8 / 2)" }}>Distanse</div>
+                <div style={{ textAlign: "center", width: "calc(6em * 2.8 / 2)" }}>Tid</div>
                 <div style={{ textAlign: "center", width: "calc(8em * 2.8 / 2)" }}>Tempo</div>
               </div>
             </div>
@@ -190,7 +190,7 @@ export default function StravaView({
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: 30,
+                  gap: 40,
                 }}
               >
                 {activities.map((activity) => (
@@ -199,13 +199,13 @@ export default function StravaView({
                     style={{
                       background: isDay ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.03)",
                       borderRadius: 15,
-                      padding: 30,
+                      padding: 40,
                       display: "flex",
-                      gap: 25,
+                      gap: 20,
                       alignItems: "center",
                     }}
                   >
-                    <div style={{ fontSize: "5em", flexShrink: 0 }}>
+                    <div style={{ fontSize: "6em", flexShrink: 0 }}>
                       {getActivityEmoji(activity.type)}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -245,19 +245,19 @@ export default function StravaView({
                     <div
                       style={{
                         display: "flex",
-                        gap: 35,
+                        gap: 20,
                         fontSize: "2.8em",
                         fontWeight: 500,
                         flexShrink: 0,
                       }}
                     >
-                      <div style={{ textAlign: "center", width: "8em" }}>
+                      <div style={{ textAlign: "center", width: "6em" }}>
                         {formatDistance(activity.distance)}
                       </div>
-                      <div style={{ textAlign: "center", width: "8em" }}>
+                      <div style={{ textAlign: "center", width: "6em" }}>
                         {formatDuration(activity.movingTime)}
                       </div>
-                      <div style={{ textAlign: "center", width: "8em" }}>
+                      <div style={{ textAlign: "center", width: "6em" }}>
                         {formatPace(
                           activity.distance,
                           activity.movingTime,
