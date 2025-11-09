@@ -3,14 +3,14 @@ import { useEffect, useMemo, useState } from "react";
 import type { Theme } from "../../types";
 
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean; fjosetRanking?: boolean; history?: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean; fjosetRanking?: boolean; history?: boolean; strava?: boolean };
   dayHours: { start: number; end: number }; // end exclusive
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600
 };
 
 const DEFAULTS: Settings = {
-  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, fjosetRanking: true, history: true },
+  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, fjosetRanking: true, history: true, strava: false },
   dayHours: { start: 6, end: 18 },
   calendarDaysAhead: 5,
   rotateSeconds: 30,
@@ -447,6 +447,14 @@ export default function AdminSettings({ theme }: { theme: Theme }) {
         setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, history: v } }))
       }
     />
+    <Toggle
+      theme={theme}
+      label="Strava aktiviteter"
+      checked={!!settings.viewsEnabled.strava}
+      onChange={(v) =>
+        setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, strava: v } }))
+      }
+    />
   </div>
   {settings.viewsEnabled.drinksMenu && (
     <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
@@ -454,6 +462,17 @@ export default function AdminSettings({ theme }: { theme: Theme }) {
     </div>
   )}
 </div>
+
+      {settings.viewsEnabled.strava && (
+        <div style={{ ...card(theme), marginBottom: 16 }}>
+          <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 18 }}>Strava konfigurasjon</h2>
+          <div style={{ fontSize: 14, opacity: 0.75 }}>
+            Konfigurer STRAVA_ACCESS_TOKEN i .env filen på serveren.
+            <br />
+            Gå til <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener noreferrer" style={{ color: theme.text }}>Strava API settings</a> for å få access token.
+          </div>
+        </div>
+      )}
 
       <div style={{ ...card(theme), marginBottom: 16 }}>
         <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 18 }}>Dag / natt</h2>

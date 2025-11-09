@@ -1,11 +1,12 @@
 {
   "viewsEnabled": {
-    "dashboard": false,
+    "dashboard": true,
     "news": false,
     "calendar": false,
     "drinksMenu": false,
     "fjosetRanking": false,
-    "history": true
+    "history": false,
+    "strava": true
   },
   "dayHours": {
     "start": 8,

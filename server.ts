@@ -86,7 +86,7 @@ type NeighborRow = { ip: string; mac: string; state: string };
 
 // ---------------- Settings schema ----------------
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu: boolean; fjosetRanking: boolean; history: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu: boolean; fjosetRanking: boolean; history: boolean; strava?: boolean };
   dayHours: { start: number; end: number }; // 0..24 (end is exclusive)
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600
@@ -106,6 +106,12 @@ const PORT = Number(process.env.PORT || 8787);
 const ET_CLIENT_NAME = process.env.ET_CLIENT_NAME || "pi-infoscreen/0.1 (example@example.com)";
 const MET_USER_AGENT = process.env.MET_USER_AGENT || "pi-infoscreen/0.1 (example@example.com)";
 const NRK_RSS_URL = process.env.NRK_RSS_URL || "https://www.nrk.no/nyheter/siste.rss";
+
+// Support multiple Strava tokens (comma-separated)
+const STRAVA_ACCESS_TOKENS = (process.env.STRAVA_ACCESS_TOKEN || "")
+  .split(",")
+  .map(t => t.trim())
+  .filter(t => t.length > 0);
 
 const PRESENCE_MODE = process.env.PRESENCE_MODE || "auto"; // "arp" | "beacon" | "auto"
 const PRESENCE_TTL_SEC = Number(process.env.PRESENCE_TTL_SEC || 20); // beacon TTL (seconds)
@@ -134,7 +140,7 @@ const SETTINGS_FILE = process.env.SETTINGS_FILE
   : path.join(__dirname, "settings.json");
 
 const DEFAULT_SETTINGS = {
-  viewsEnabled: { dashboard: true, news: true, calendar: true },
+  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, fjosetRanking: true, history: true, strava: false },
   dayHours: { start: 6, end: 18 }, // local hours where UI is considered "day"
   calendarDaysAhead: 4,
   rotateSeconds: 45,
@@ -519,6 +525,95 @@ app.get("/api/history", async (req: Request, res: Response) => {
         { year: 1872, text: "Roald Amundsen ble født. Norsk polarforsker.", type: "birth" },
       ],
     });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Strava Activities
+// ---------------------------------------------------------------------------
+let stravaCache: { activities: any[]; fetchedAt: number } | null = null;
+const STRAVA_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+
+app.get("/api/strava/activities", async (req: Request, res: Response) => {
+  try {
+    if (STRAVA_ACCESS_TOKENS.length === 0) {
+      return res.json({ activities: [] });
+    }
+
+    // Check cache
+    const now = Date.now();
+    if (stravaCache && (now - stravaCache.fetchedAt) < STRAVA_CACHE_TTL) {
+      return res.json({ activities: stravaCache.activities });
+    }
+
+    // Fetch activities for all tokens in parallel
+    const allActivitiesPromises = STRAVA_ACCESS_TOKENS.map(async (token) => {
+      try {
+        // First, get the athlete's profile
+        const athleteResponse = await fetch(`https://www.strava.com/api/v3/athlete`, {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
+
+        if (!athleteResponse.ok) {
+          console.error(`Strava athlete API error for token ${token.substring(0, 10)}...: ${athleteResponse.status}`);
+          return [];
+        }
+
+        const athlete = await athleteResponse.json();
+        const athleteName = `${athlete.firstname} ${athlete.lastname}`;
+
+        // Then fetch their activities
+        const activitiesUrl = `https://www.strava.com/api/v3/athlete/activities?per_page=10`;
+        const response = await fetch(activitiesUrl, {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          console.error(`Strava API error for token ${token.substring(0, 10)}...: ${response.status}`);
+          return [];
+        }
+
+        const activities = await response.json();
+        return activities.map((a: any) => ({
+          id: a.id,
+          name: a.name,
+          type: a.type,
+          distance: a.distance,
+          movingTime: a.moving_time,
+          elapsedTime: a.elapsed_time,
+          totalElevationGain: a.total_elevation_gain,
+          startDate: a.start_date,
+          athleteName: athleteName,
+        }));
+      } catch (error: any) {
+        console.error(`Failed to fetch activities for token: ${error.message}`);
+        return [];
+      }
+    });
+
+    const allActivitiesArrays = await Promise.all(allActivitiesPromises);
+    const allActivities = allActivitiesArrays.flat();
+
+    // Sort by date (most recent first)
+    allActivities.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+
+    // Take top 20 activities
+    const formatted = allActivities.slice(0, 20);
+
+    // Cache the results
+    stravaCache = {
+      activities: formatted,
+      fetchedAt: now,
+    };
+
+    return res.json({ activities: formatted });
+  } catch (error: any) {
+    console.error("Strava API failed:", error.message);
+    return res.json({ activities: [] });
   }
 });
 
@@ -1249,11 +1344,12 @@ function normalizeSettings(input: any, prev?: Settings): Settings {
     drinksMenu: !!v.drinksMenu,
     fjosetRanking: !!v.fjosetRanking,
     history: !!v.history,
+    strava: !!v.strava,
   };
 
   // Server-side enforcement: when DrinksMenu is active, disable others
   if (outViews.drinksMenu) {
-    outViews = { dashboard: false, news: false, calendar: false, drinksMenu: true, fjosetRanking: false, history: false };
+    outViews = { dashboard: false, news: false, calendar: false, drinksMenu: true, fjosetRanking: false, history: false, strava: false };
   }
 
   const out: Settings = {
