@@ -50,7 +50,8 @@ export default function StravaView({
       try {
         const r = await fetch(`/api/strava/activities`);
         const data = await r.json();
-        setActivities(data.activities || []);
+        // Only show top 4 activities
+        setActivities((data.activities || []).slice(0, 4));
       } catch (err) {
         console.error("Failed to fetch Strava activities:", err);
       }
@@ -157,139 +158,116 @@ export default function StravaView({
             >
               Siste Aktiviteter
             </h2>
-            <div style={{ flex: 1, overflow: "auto" }}>
-              <table
+            <div
+              style={{
+                display: "flex",
+                gap: 25,
+                fontSize: "2em",
+                opacity: 0.5,
+                marginBottom: 15,
+              }}
+            >
+              <div style={{ width: "calc(5em * 2.8 / 2)", flexShrink: 0 }}>
+                {/* Spacer matching emoji width at 5em in 2.8em context */}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {/* Spacer for left content */}
+              </div>
+              <div
                 style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  tableLayout: "fixed",
+                  display: "flex",
+                  gap: 35,
+                  flexShrink: 0,
                 }}
               >
-                <colgroup>
-                  <col style={{ width: "8%" }} />
-                  <col style={{ width: "30%" }} />
-                  <col style={{ width: "17%" }} />
-                  <col style={{ width: "15%" }} />
-                  <col style={{ width: "15%" }} />
-                  <col style={{ width: "15%" }} />
-                </colgroup>
-                <thead>
-                  <tr
+                <div style={{ textAlign: "center", width: "calc(8em * 2.8 / 2)" }}>Distanse</div>
+                <div style={{ textAlign: "center", width: "calc(8em * 2.8 / 2)" }}>Tid</div>
+                <div style={{ textAlign: "center", width: "calc(8em * 2.8 / 2)" }}>Tempo</div>
+              </div>
+            </div>
+            <div style={{ flex: 1, overflow: "auto" }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 30,
+                }}
+              >
+                {activities.map((activity) => (
+                  <div
+                    key={activity.id}
                     style={{
-                      textAlign: "left",
-                      opacity: 0.65,
-                      fontSize: "1.8em",
+                      background: isDay ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.03)",
+                      borderRadius: 15,
+                      padding: 30,
+                      display: "flex",
+                      gap: 25,
+                      alignItems: "center",
                     }}
                   >
-                    <th style={{ padding: "0.35em 0.3em", paddingLeft: 15 }}>
-                      
-                    </th>
-                    <th style={{ padding: "0.35em 0.3em" }}>Aktivitet</th>
-                    <th style={{ padding: "0.35em 0.3em" }}>Hvem</th>
-                    <th style={{ padding: "0.35em 0.3em" }}>Distanse</th>
-                    <th style={{ padding: "0.35em 0.3em" }}>Tid</th>
-                    <th
-                      style={{
-                        padding: "0.35em 0.3em",
-                        textAlign: "right",
-                        paddingRight: 30,
-                      }}
-                    >
-                      Tempo
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activities.map((activity, i) => (
-                    <tr
-                      key={activity.id}
-                      style={{
-                        borderTop: i > 0 ? `1px solid ${theme.border}` : "none",
-                      }}
-                    >
-                      <td
+                    <div style={{ fontSize: "5em", flexShrink: 0 }}>
+                      {getActivityEmoji(activity.type)}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
                         style={{
-                          padding: "0.4em 0.3em",
-                          paddingLeft: 15,
-                          fontSize: "3em",
-                          textAlign: "center",
-                        }}
-                      >
-                        {getActivityEmoji(activity.type)}
-                      </td>
-                      <td
-                        style={{
-                          padding: "0.4em 0.3em",
-                          fontSize: "2.8em",
-                          fontWeight: 400,
+                          fontSize: "3.5em",
+                          fontWeight: 600,
+                          marginBottom: 10,
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                         }}
                       >
-                        <div>{activity.name}</div>
-                        <div
-                          style={{
-                            fontSize: "0.6em",
-                            opacity: 0.6,
-                            marginTop: "0.2em",
-                          }}
-                        >
-                          {formatDistanceToNow(new Date(activity.startDate), {
-                            addSuffix: true,
-                            locale: nb,
-                          })}
-                        </div>
-                      </td>
-                      <td
+                        {activity.name}
+                      </div>
+                      <div
                         style={{
-                          padding: "0.4em 0.3em",
-                          fontSize: "2.8em",
-                          fontWeight: 400,
+                          fontSize: "2.5em",
+                          opacity: 0.7,
+                          marginBottom: 15,
                         }}
                       >
                         {activity.athleteName || "—"}
-                      </td>
-                      <td
+                      </div>
+                      <div
                         style={{
-                          padding: "0.4em 0.3em",
-                          fontSize: "2.8em",
-                          fontVariantNumeric: "tabular-nums",
-                          fontWeight: 400,
+                          fontSize: "2.2em",
+                          opacity: 0.6,
                         }}
                       >
+                        {formatDistanceToNow(new Date(activity.startDate), {
+                          addSuffix: true,
+                          locale: nb,
+                        })}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 35,
+                        fontSize: "2.8em",
+                        fontWeight: 500,
+                        flexShrink: 0,
+                      }}
+                    >
+                      <div style={{ textAlign: "center", width: "8em" }}>
                         {formatDistance(activity.distance)}
-                      </td>
-                      <td
-                        style={{
-                          padding: "0.4em 0.3em",
-                          fontSize: "2.8em",
-                          fontVariantNumeric: "tabular-nums",
-                          fontWeight: 400,
-                        }}
-                      >
+                      </div>
+                      <div style={{ textAlign: "center", width: "8em" }}>
                         {formatDuration(activity.movingTime)}
-                      </td>
-                      <td
-                        style={{
-                          padding: "0.4em 0.3em",
-                          fontSize: "2.8em",
-                          fontVariantNumeric: "tabular-nums",
-                          fontWeight: 400,
-                          textAlign: "right",
-                          paddingRight: 30,
-                        }}
-                      >
+                      </div>
+                      <div style={{ textAlign: "center", width: "8em" }}>
                         {formatPace(
                           activity.distance,
                           activity.movingTime,
                           activity.type
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
             <div
               style={{
