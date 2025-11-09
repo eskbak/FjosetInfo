@@ -23,7 +23,7 @@ export default function HistoryView({
   const [data, setData] = useState<HistoryData | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [pages, setPages] = useState<HistoryFact[][]>([]);
-  const ITEMS_PER_PAGE = 5; // Max 5 facts per page to avoid overflow
+  const ITEMS_PER_PAGE = 4; // Max 4 facts per page to avoid overflow
 
   useEffect(() => {
     let alive = true;
@@ -106,17 +106,19 @@ export default function HistoryView({
         marginBottom: "20px"
       }}>
         <div style={{
-          fontSize: "5em",
+          fontSize: "6em",
           fontWeight: "bold",
           color: "#CC0000",
           letterSpacing: "0.1em",
-          marginBottom: "10px"
+          marginBottom: "10px",
+          textAlign: "center"
         }}>
           DAGEN I DAG
         </div>
         <div style={{
           fontSize: "2.2em",
-          marginBottom: "5px"
+          marginBottom: "5px",
+          textAlign: "center"
         }}>
           {data.date}
         </div>
@@ -133,7 +135,7 @@ export default function HistoryView({
         display: "flex",
         flexDirection: "column",
         gap: "20px",
-        fontSize: "3em",
+        fontSize: "2.5em",
         lineHeight: 1.4,
         minHeight: 0
       }}>
