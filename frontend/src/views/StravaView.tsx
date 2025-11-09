@@ -151,118 +151,150 @@ export default function StravaView({
             <h2
               style={{
                 marginTop: 0,
-                marginBottom: 20,
-                fontSize: "3em",
+                marginBottom: 40,
+                fontSize: "4em",
                 textAlign: "center",
               }}
             >
               Siste Aktiviteter
             </h2>
-            <div
-              style={{
-                display: "flex",
-                gap: 25,
-                fontSize: "2em",
-                opacity: 0.5,
-                marginBottom: 15,
-              }}
-            >
-              <div style={{ width: "calc(5em * 2.8 / 2)", flexShrink: 0 }}>
-                {/* Spacer matching emoji width at 5em in 2.8em context */}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {/* Spacer for left content */}
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  gap: 10,
-                  flexShrink: 0,
-                }}
-              >
-                <div style={{ textAlign: "center", width: "calc(6em * 2.8 / 2)" }}>Distanse</div>
-                <div style={{ textAlign: "center", width: "calc(6em * 2.8 / 2)" }}>Tid</div>
-                <div style={{ textAlign: "center", width: "calc(8em * 2.8 / 2)" }}>Tempo</div>
-              </div>
-            </div>
             <div style={{ flex: 1, overflow: "auto" }}>
               <div
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: 40,
+                  gap: 50,
                 }}
               >
                 {activities.map((activity) => (
                   <div
                     key={activity.id}
                     style={{
-                      background: isDay ? "rgba(0,0,0,0.03)" : "rgba(255,255,255,0.03)",
-                      borderRadius: 15,
-                      padding: 40,
+                      background: isDay ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.04)",
+                      borderRadius: 20,
+                      padding: 50,
                       display: "flex",
-                      gap: 20,
-                      alignItems: "center",
+                      flexDirection: "column",
+                      gap: 30,
                     }}
                   >
-                    <div style={{ fontSize: "6em", flexShrink: 0 }}>
-                      {getActivityEmoji(activity.type)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: "3.5em",
-                          fontWeight: 600,
-                          marginBottom: 10,
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                      >
-                        {activity.name}
+                    <div style={{ display: "flex", alignItems: "center", gap: 30 }}>
+                      <div style={{ fontSize: "8em", flexShrink: 0 }}>
+                        {getActivityEmoji(activity.type)}
                       </div>
-                      <div
-                        style={{
-                          fontSize: "2.5em",
-                          opacity: 0.7,
-                          marginBottom: 15,
-                        }}
-                      >
-                        {activity.athleteName || "—"}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "2.2em",
-                          opacity: 0.6,
-                        }}
-                      >
-                        {formatDistanceToNow(new Date(activity.startDate), {
-                          addSuffix: true,
-                          locale: nb,
-                        })}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: "4.5em",
+                            fontWeight: 700,
+                            marginBottom: 15,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {activity.name}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "3em",
+                            opacity: 0.7,
+                          }}
+                        >
+                          {activity.athleteName || "—"}
+                        </div>
                       </div>
                     </div>
                     <div
                       style={{
                         display: "flex",
-                        gap: 20,
-                        fontSize: "2.8em",
-                        fontWeight: 500,
-                        flexShrink: 0,
+                        justifyContent: "space-around",
+                        paddingTop: 20,
+                        borderTop: `1px solid ${isDay ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.1)"}`,
                       }}
                     >
-                      <div style={{ textAlign: "center", width: "6em" }}>
-                        {formatDistance(activity.distance)}
+                      <div style={{ textAlign: "center" }}>
+                        <div
+                          style={{
+                            fontSize: "2.2em",
+                            opacity: 0.5,
+                            marginBottom: 10,
+                          }}
+                        >
+                          Distanse
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "3.5em",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {formatDistance(activity.distance)}
+                        </div>
                       </div>
-                      <div style={{ textAlign: "center", width: "6em" }}>
-                        {formatDuration(activity.movingTime)}
+                      <div style={{ textAlign: "center" }}>
+                        <div
+                          style={{
+                            fontSize: "2.2em",
+                            opacity: 0.5,
+                            marginBottom: 10,
+                          }}
+                        >
+                          Tid
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "3.5em",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {formatDuration(activity.movingTime)}
+                        </div>
                       </div>
-                      <div style={{ textAlign: "center", width: "6em" }}>
-                        {formatPace(
-                          activity.distance,
-                          activity.movingTime,
-                          activity.type
-                        )}
+                      <div style={{ textAlign: "center" }}>
+                        <div
+                          style={{
+                            fontSize: "2.2em",
+                            opacity: 0.5,
+                            marginBottom: 10,
+                          }}
+                        >
+                          Tempo
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "3.5em",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {formatPace(
+                            activity.distance,
+                            activity.movingTime,
+                            activity.type
+                          )}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "center" }}>
+                        <div
+                          style={{
+                            fontSize: "2.2em",
+                            opacity: 0.5,
+                            marginBottom: 10,
+                          }}
+                        >
+                          Når
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "3.5em",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {formatDistanceToNow(new Date(activity.startDate), {
+                            addSuffix: false,
+                            locale: nb,
+                          })}
+                        </div>
                       </div>
                     </div>
                   </div>
