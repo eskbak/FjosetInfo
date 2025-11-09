@@ -151,8 +151,8 @@ export default function StravaView({
             <h2
               style={{
                 marginTop: 0,
-                marginBottom: 40,
-                fontSize: "4em",
+                marginBottom: 30,
+                fontSize: "3.5em",
                 textAlign: "center",
               }}
             >
@@ -163,7 +163,7 @@ export default function StravaView({
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: 50,
+                  gap: 35,
                 }}
               >
                 {activities.map((activity) => (
@@ -172,22 +172,22 @@ export default function StravaView({
                     style={{
                       background: isDay ? "rgba(0,0,0,0.04)" : "rgba(255,255,255,0.04)",
                       borderRadius: 20,
-                      padding: 50,
+                      padding: 35,
                       display: "flex",
                       flexDirection: "column",
-                      gap: 30,
+                      gap: 25,
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: 30 }}>
-                      <div style={{ fontSize: "8em", flexShrink: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 25 }}>
+                      <div style={{ fontSize: "5em", flexShrink: 0 }}>
                         {getActivityEmoji(activity.type)}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div
                           style={{
-                            fontSize: "4.5em",
+                            fontSize: "3.5em",
                             fontWeight: 700,
-                            marginBottom: 15,
+                            marginBottom: 12,
                             whiteSpace: "nowrap",
                             overflow: "hidden",
                             textOverflow: "ellipsis",
@@ -197,7 +197,7 @@ export default function StravaView({
                         </div>
                         <div
                           style={{
-                            fontSize: "3em",
+                            fontSize: "2.5em",
                             opacity: 0.7,
                           }}
                         >
@@ -209,23 +209,23 @@ export default function StravaView({
                       style={{
                         display: "flex",
                         justifyContent: "space-around",
-                        paddingTop: 20,
+                        paddingTop: 15,
                         borderTop: `1px solid ${isDay ? "rgba(0,0,0,0.1)" : "rgba(255,255,255,0.1)"}`,
                       }}
                     >
                       <div style={{ textAlign: "center" }}>
                         <div
                           style={{
-                            fontSize: "2.2em",
+                            fontSize: "1.8em",
                             opacity: 0.5,
-                            marginBottom: 10,
+                            marginBottom: 8,
                           }}
                         >
                           Distanse
                         </div>
                         <div
                           style={{
-                            fontSize: "3.5em",
+                            fontSize: "2.8em",
                             fontWeight: 600,
                           }}
                         >
@@ -235,16 +235,16 @@ export default function StravaView({
                       <div style={{ textAlign: "center" }}>
                         <div
                           style={{
-                            fontSize: "2.2em",
+                            fontSize: "1.8em",
                             opacity: 0.5,
-                            marginBottom: 10,
+                            marginBottom: 8,
                           }}
                         >
                           Tid
                         </div>
                         <div
                           style={{
-                            fontSize: "3.5em",
+                            fontSize: "2.8em",
                             fontWeight: 600,
                           }}
                         >
@@ -254,16 +254,16 @@ export default function StravaView({
                       <div style={{ textAlign: "center" }}>
                         <div
                           style={{
-                            fontSize: "2.2em",
+                            fontSize: "1.8em",
                             opacity: 0.5,
-                            marginBottom: 10,
+                            marginBottom: 8,
                           }}
                         >
                           Tempo
                         </div>
                         <div
                           style={{
-                            fontSize: "3.5em",
+                            fontSize: "2.8em",
                             fontWeight: 600,
                           }}
                         >
@@ -277,16 +277,16 @@ export default function StravaView({
                       <div style={{ textAlign: "center" }}>
                         <div
                           style={{
-                            fontSize: "2.2em",
+                            fontSize: "1.8em",
                             opacity: 0.5,
-                            marginBottom: 10,
+                            marginBottom: 8,
                           }}
                         >
                           Når
                         </div>
                         <div
                           style={{
-                            fontSize: "3.5em",
+                            fontSize: "2.8em",
                             fontWeight: 600,
                           }}
                         >
