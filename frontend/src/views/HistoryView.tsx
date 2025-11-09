@@ -21,7 +21,9 @@ export default function HistoryView({
   isDay: boolean;
 }) {
   const [data, setData] = useState<HistoryData | null>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pages, setPages] = useState<HistoryFact[][]>([]);
+  const ITEMS_PER_PAGE = 5; // Max 5 facts per page to avoid overflow
 
   useEffect(() => {
     let alive = true;
@@ -36,7 +38,14 @@ export default function HistoryView({
         console.log("History data loaded:", json);
         if (alive && json.facts && json.facts.length > 0) {
           setData(json);
-          setCurrentIndex(0);
+          
+          // Split facts into pages
+          const factPages: HistoryFact[][] = [];
+          for (let i = 0; i < json.facts.length; i += ITEMS_PER_PAGE) {
+            factPages.push(json.facts.slice(i, i + ITEMS_PER_PAGE));
+          }
+          setPages(factPages);
+          setCurrentPage(0);
         } else {
           console.warn("No history facts available");
         }
@@ -53,16 +62,16 @@ export default function HistoryView({
     };
   }, []);
 
-  // Rotate through facts every 12 seconds
+  // Rotate through pages every 12 seconds if there are multiple pages
   useEffect(() => {
-    if (!data || data.facts.length === 0) return;
+    if (pages.length <= 1) return;
     const rotateId = setInterval(() => {
-      setCurrentIndex((i) => (i + 1) % data.facts.length);
+      setCurrentPage((i) => (i + 1) % pages.length);
     }, 12000);
     return () => clearInterval(rotateId);
-  }, [data]);
+  }, [pages]);
 
-  if (!data || data.facts.length === 0) {
+  if (!data || pages.length === 0) {
     return (
       <main style={{ 
         display: "flex", 
@@ -77,115 +86,98 @@ export default function HistoryView({
     );
   }
 
-  const currentFact = data.facts[currentIndex];
-  const typeEmoji = currentFact.type === "birth" ? "👶" : currentFact.type === "death" ? "🕊️" : "📅";
-  const typeLabel = currentFact.type === "birth" ? "Født" : currentFact.type === "death" ? "Død" : "Hendelse";
+  const currentFacts = pages[currentPage];
 
   return (
     <main style={{ 
       display: "flex", 
       flexDirection: "column", 
       flex: 1, 
-      padding: "40px 60px",
-      gap: 30,
-      justifyContent: "center",
+      padding: "30px 50px",
       minHeight: 0,
-      overflow: "hidden"
+      overflow: "hidden",
+      background: "#000000",
+      color: "#FFFFFF",
+      fontFamily: "monospace",
+      borderRadius: "20px"
     }}>
-      {/* Title */}
-      <div style={{ textAlign: "center" }}>
-        <h1 style={{ 
-          fontSize: "4.5em", 
-          margin: 0,
-          fontWeight: 300,
-          opacity: 0.9
+      {/* Tekst-TV Header */}
+      <div style={{
+        marginBottom: "20px"
+      }}>
+        <div style={{
+          fontSize: "5em",
+          fontWeight: "bold",
+          color: "#CC0000",
+          letterSpacing: "0.1em",
+          marginBottom: "10px"
         }}>
-          📜 Dagens historie
-        </h1>
-        <p style={{ 
-          fontSize: "2.5em", 
-          margin: "10px 0 0 0",
-          opacity: 0.6,
-          fontWeight: 300
+          I DAG
+        </div>
+        <div style={{
+          fontSize: "2.2em",
+          marginBottom: "5px"
         }}>
           {data.date}
-        </p>
+        </div>
+        <div style={{
+          height: "8px",
+          background: "#CC0000",
+          marginTop: "15px"
+        }}></div>
       </div>
 
-      {/* Current Fact */}
+      {/* History Facts List - Tekst-TV Style */}
       <div style={{
-        background: theme.card,
-        border: `2px solid ${theme.border}`,
-        borderRadius: 20,
-        padding: "50px 60px",
-        boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
-        transition: "all 0.5s ease",
-        minHeight: "300px",
+        flex: 1,
         display: "flex",
         flexDirection: "column",
-        justifyContent: "center",
-        gap: 30
+        gap: "20px",
+        fontSize: "2em",
+        lineHeight: 1.4,
+        minHeight: 0
       }}>
-        {/* Year Badge */}
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 20
-        }}>
-          <div style={{
-            background: colors.YR.primary + "20",
-            color: colors.YR.primary,
-            padding: "15px 30px",
-            borderRadius: 12,
-            fontSize: "3em",
-            fontWeight: 600,
-            border: `2px solid ${colors.YR.primary}40`
-          }}>
-            {currentFact.year}
-          </div>
-          <div style={{
-            fontSize: "2em",
-            opacity: 0.5,
+        {currentFacts.map((fact, i) => (
+          <div key={i} style={{
             display: "flex",
-            alignItems: "center",
-            gap: 10
+            alignItems: "flex-start",
+            gap: "15px"
           }}>
-            <span>{typeEmoji}</span>
-            <span style={{ fontSize: "0.8em" }}>{typeLabel}</span>
+            <span style={{
+              color: "#79F3F9",
+              minWidth: "100px",
+              fontWeight: "bold"
+            }}>
+              {fact.year}
+            </span>
+            <span style={{
+              flex: 1,
+              color: "#FFFFFF"
+            }}>
+              {fact.text}
+            </span>
           </div>
-        </div>
-
-        {/* Fact Text */}
-        <p style={{ 
-          fontSize: "2.8em", 
-          lineHeight: 1.5,
-          margin: 0,
-          fontWeight: 300
-        }}>
-          {currentFact.text}
-        </p>
+        ))}
       </div>
 
-      {/* Progress Dots */}
+      {/* Bottom Red Bar with Page Indicator */}
       <div style={{
-        display: "flex",
-        justifyContent: "center",
-        gap: 12,
-        marginTop: 10
+        marginTop: "20px"
       }}>
-        {data.facts.map((_, i) => (
-          <div
-            key={i}
-            style={{
-              width: i === currentIndex ? 16 : 10,
-              height: i === currentIndex ? 16 : 10,
-              borderRadius: "50%",
-              background: i === currentIndex ? colors.YR.primary : theme.text,
-              opacity: i === currentIndex ? 1 : 0.3,
-              transition: "all 0.3s ease"
-            }}
-          />
-        ))}
+        {pages.length > 1 && (
+          <div style={{
+            textAlign: "center",
+            fontSize: "1.5em",
+            color: "#79F3F9",
+            marginBottom: "10px"
+          }}>
+            {currentPage + 1} / {pages.length}
+          </div>
+        )}
+        <div style={{
+          height: "8px",
+          background: "#CC0000"
+        }}></div>
       </div>
     </main>
   );

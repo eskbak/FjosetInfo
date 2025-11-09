@@ -1,6 +1,6 @@
 {
   "viewsEnabled": {
-    "dashboard": true,
+    "dashboard": false,
     "news": false,
     "calendar": false,
     "drinksMenu": false,

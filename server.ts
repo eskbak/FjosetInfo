@@ -270,7 +270,83 @@ app.get("/api/entur/departures", async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // This Day in History (Wikipedia API - Norwegian)
 // ---------------------------------------------------------------------------
+import { JSDOM } from 'jsdom';
+
 let historyCached: { date: string; facts: any[]; fetchedDate: string } | null = null as { date: string; facts: any[]; fetchedDate: string } | null;
+
+// Helper function to get the next sibling element
+function nextSibling(element: any): any {
+  return element.nextElementSibling;
+}
+
+// Helper to extract history items from a section
+function getHistorieFromSection(page: Document, sectionId: string): string[] {
+  let content: HTMLElement | null = page.querySelector(`#${sectionId}`)?.parentElement || null;
+  
+  if (!content) {
+    return [];
+  }
+  
+  // Find the <ul> element after the header
+  while (content && content.tagName !== "UL") {
+    content = nextSibling(content);
+  }
+  
+  if (!content || !content.textContent) {
+    return [];
+  }
+  
+  // Split by newlines and filter out empty strings
+  return content.textContent.split("\n").filter(item => item.trim().length > 0);
+}
+
+// Convert a string to a history fact
+function convertStringToFact(str: string): { year: number; text: string; type: string } | null {
+  // Split on different dash types
+  let items = str.split(/–(.*)|—(.*)|-(.*)/s).map((s) => (s ? s.trim() : ""));
+  items = items.filter((item) => item !== "");
+  
+  if (items.length < 2) {
+    return null;
+  }
+  
+  // Get year (first part)
+  const yearStr = items.shift()!;
+  const yearMatch = yearStr.match(/(\d{4})/);
+  
+  if (!yearMatch) {
+    return null;
+  }
+  
+  const year = parseInt(yearMatch[1]);
+  
+  // Get content (rest of the parts joined)
+  let content = items
+    .join(" ")
+    .replace(/(?:\[)(\d)(?:])/, "") // Remove reference markers like [1]
+    .replace(/\[\d+\]/g, "") // Remove all reference numbers
+    .split(". ");
+  
+  let text = content.shift()?.trim() + ".";
+  
+  // Add more sentences until we hit 200 char limit (like dagenidag does)
+  while (content.length > 0 && (text + content[0]).length <= 200) {
+    text += " " + content.shift()?.trim() + ".";
+  }
+  
+  // Remove double periods
+  text = text.replace(/\.+/g, '.').trim();
+  
+  if (text.length < 15 || text.length > 400 || year < 1000 || year > 2030) {
+    return null;
+  }
+  
+  return {
+    year,
+    text,
+    type: "event"
+  };
+}
 
 app.get("/api/history", async (req: Request, res: Response) => {
   try {
@@ -295,11 +371,17 @@ app.get("/api/history", async (req: Request, res: Response) => {
     
     console.log('Fetching fresh history data...');
     
-    // Use "Wikipedia:Dagen_i_dag" page which has "Norsk historie" section
-    const pageTitle = "Wikipedia:Dagen_i_dag";
-    const url = `https://no.wikipedia.org/w/api.php?action=parse&page=${encodeURIComponent(pageTitle)}&prop=text&format=json&origin=*`;
+    // Get month and day for Wikipedia URLs (format: "9._november")
+    const dayNum = now.getDate();
+    const monthNames = ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 
+                        'juli', 'august', 'september', 'oktober', 'november', 'desember'];
+    const monthName = monthNames[now.getMonth()];
     
-    console.log(`Fetching Norwegian Wikipedia: ${pageTitle}`);
+    // Use the date-specific page (e.g., "9._november")
+    const pageTitle = `${dayNum}._${monthName}`;
+    const url = `https://no.wikipedia.org/w/api.php?action=parse&origin=*&format=json&page=${encodeURIComponent(pageTitle)}`;
+    
+    console.log(`Fetching Norwegian Wikipedia page: ${pageTitle}`);
     
     const response = await fetch(url, {
       headers: {
@@ -318,99 +400,64 @@ app.get("/api/history", async (req: Request, res: Response) => {
       throw new Error(data.error.info);
     }
     
-    // Parse the HTML content to extract events from "Norsk historie" section
+    // Parse the HTML using JSDOM (like dagenidag does)
     const html = data.parse?.text?.['*'] || '';
     console.log(`Got HTML content, length: ${html.length}`);
     
-    // Try to find "Norsk historie" with different patterns
-    let norskHistorieMatch = html.match(/<span[^>]*id="Norsk_historie"[^>]*>.*?<\/span>.*?<\/h3>(.*?)(?=<h[23]|<div class="printfooter"|$)/is);
-    if (!norskHistorieMatch) {
-      norskHistorieMatch = html.match(/<h3[^>]*>.*?Norsk historie.*?<\/h3>(.*?)(?=<h[23]|<div class="printfooter"|$)/is);
-    }
+    const dom = new JSDOM(html);
+    const page = dom.window.document;
     
-    if (!norskHistorieMatch) {
-      console.log('Could not find "Norsk historie" section, searching for section markers...');
-      // Log all h3 headers to help debug
-      const headers = html.match(/<h3[^>]*>.*?<\/h3>/gi) || [];
-      console.log('Found headers:', headers.slice(0, 5));
-    } else {
-      console.log('Found "Norsk historie" section');
-    }
+    // Get facts from different sections (like dagenidag does)
+    let allFacts: Array<{ year: number; text: string; type: string }> = [];
     
-    const sectionHtml = norskHistorieMatch ? norskHistorieMatch[1] : '';
-    console.log(`Section HTML length: ${sectionHtml.length}`);
-    
-    if (sectionHtml.length > 100) {
-      console.log(`First 800 chars of section: ${sectionHtml.substring(0, 800)}`);
-    }
-    
-    // Extract facts from list items
-    const facts: any[] = [];
-    
-    if (sectionHtml.length > 0) {
-      // Look for list items with years
-      const listItemPattern = /<li>(.*?)<\/li>/gi;
-      let liMatch;
-      
-      console.log('Parsing list items...');
-      while ((liMatch = listItemPattern.exec(sectionHtml)) && facts.length < 15) {
-        const itemText = liMatch[1];
-        console.log(`Found list item: ${itemText.substring(0, 200)}`);
-        
-        // Look for pattern: YYYY – text or YYYY: text
-        const yearMatch = itemText.match(/^[^>]*?(\d{4})\s*[–:-]\s*(.*)$/s);
-        if (yearMatch) {
-          const year = parseInt(yearMatch[1]);
-          console.log(`Matched year: ${year}`);
-          let text = yearMatch[2] // This gets everything after the year
-            .replace(/<[^>]+>/g, '') // Remove HTML tags
-            .replace(/&nbsp;/g, ' ')
-            .replace(/&amp;/g, '&')
-            .replace(/&quot;/g, '"')
-            .replace(/&#\d+;/g, '')
-            .replace(/\[[^\]]+\]/g, '') // Remove [edit] links
-            .replace(/\s+/g, ' ') // Normalize whitespace
-            .trim();
-          
-          console.log(`Extracted text (${text.length} chars): ${text.substring(0, 150)}`);
-          
-          if (text && text.length > 15 && text.length < 500 && year > 1000 && year < 2030) {
-            facts.push({
-              year,
-              text,
-              type: "event"
-            });
-            console.log(`✓ Added fact for year ${year}`);
-          } else {
-            console.log(`✗ Rejected: length=${text.length}, year=${year}`);
-          }
-        } else {
-          console.log('No year match found in this item');
-        }
+    // Try "Historie" section
+    console.log('Looking for "Historie" section...');
+    const historieItems = getHistorieFromSection(page, 'Historie');
+    console.log(`Found ${historieItems.length} items in Historie section`);
+    for (const item of historieItems) {
+      const fact = convertStringToFact(item);
+      if (fact) {
+        allFacts.push(fact);
+        console.log(`✓ Added: ${fact.year} - ${fact.text.substring(0, 80)}...`);
       }
     }
     
-    console.log(`Extracted ${facts.length} facts from Norwegian Wikipedia "Norsk historie"`);
+    // Try "Norsk_historie" section
+    console.log('Looking for "Norsk_historie" section...');
+    const norskItems = getHistorieFromSection(page, 'Norsk_historie');
+    console.log(`Found ${norskItems.length} items in Norsk_historie section`);
+    for (const item of norskItems) {
+      const fact = convertStringToFact(item);
+      if (fact) {
+        allFacts.push(fact);
+        console.log(`✓ Added: ${fact.year} - ${fact.text.substring(0, 80)}...`);
+      }
+    }
     
-    // If we got Norwegian data, use it (even just 1 fact is fine)
-    if (facts.length >= 1) {
+    console.log(`Total extracted: ${allFacts.length} facts from Norwegian Wikipedia`);
+    
+    // Sort by year
+    allFacts.sort((a, b) => a.year - b.year);
+    
+    // If we got Norwegian data, use it
+    if (allFacts.length >= 1) {
       const dateStr = now.toLocaleDateString("nb-NO", { day: "numeric", month: "long" });
       
       // Cache the result
       historyCached = {
         date: dateStr,
-        facts: facts.slice(0, 10),
+        facts: allFacts.slice(0, 10),
         fetchedDate: todayKey,
       };
       
       return res.json({
         date: dateStr,
-        facts: facts.slice(0, 10),
+        facts: allFacts.slice(0, 10),
       });
     }
     
     // Otherwise fall back to English REST API
-    console.log(`Not enough Norwegian data (${facts.length}), using English API...`);
+    console.log(`Not enough Norwegian data (${allFacts.length}), using English API...`);
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
     const englishUrl = `https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/${month}/${day}`;
