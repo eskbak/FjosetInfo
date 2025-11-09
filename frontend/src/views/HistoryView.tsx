@@ -112,7 +112,7 @@ export default function HistoryView({
           letterSpacing: "0.1em",
           marginBottom: "10px"
         }}>
-          I DAG
+          DAGEN I DAG
         </div>
         <div style={{
           fontSize: "2.2em",
@@ -133,7 +133,7 @@ export default function HistoryView({
         display: "flex",
         flexDirection: "column",
         gap: "20px",
-        fontSize: "2em",
+        fontSize: "3em",
         lineHeight: 1.4,
         minHeight: 0
       }}>
