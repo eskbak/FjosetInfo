@@ -67,7 +67,7 @@ export default function HistoryView({
     if (pages.length <= 1) return;
     const rotateId = setInterval(() => {
       setCurrentPage((i) => (i + 1) % pages.length);
-    }, 12000);
+    }, 20000);
     return () => clearInterval(rotateId);
   }, [pages]);
 

@@ -3,17 +3,19 @@ import { useEffect, useMemo, useState } from "react";
 import type { Theme } from "../../types";
 
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean; fjosetRanking?: boolean; history?: boolean; strava?: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean; history?: boolean };
   dayHours: { start: number; end: number }; // end exclusive
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600
+  viewDurations?: { dashboard?: number; news?: number; calendar?: number; drinksMenu?: number; history?: number };
 };
 
 const DEFAULTS: Settings = {
-  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, fjosetRanking: true, history: true, strava: false },
+  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, history: true },
   dayHours: { start: 6, end: 18 },
   calendarDaysAhead: 5,
   rotateSeconds: 30,
+  viewDurations: { dashboard: 30, news: 30, calendar: 30, drinksMenu: 30, history: 30 },
 };
 
 function card(theme: Theme): React.CSSProperties {
@@ -386,13 +388,13 @@ export default function AdminSettings({ theme }: { theme: Theme }) {
             // Activate DrinksMenu, disable others
             return { 
               ...s, 
-              viewsEnabled: { dashboard: false, news: false, calendar: false, drinksMenu: true, fjosetRanking: false, history: false } 
+              viewsEnabled: { dashboard: false, news: false, calendar: false, drinksMenu: true, history: false } 
             };
           } else {
             // Deactivate DrinksMenu, restore to a sensible default (all on)
             return {
               ...s,
-              viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, fjosetRanking: true, history: true }
+              viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, history: true }
             };
           }
         })
@@ -431,14 +433,7 @@ export default function AdminSettings({ theme }: { theme: Theme }) {
         setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, calendar: v } }))
       }
     />
-    <Toggle
-      theme={theme}
-      label="Fjøset Ranking"
-      checked={!!settings.viewsEnabled.fjosetRanking}
-      onChange={(v) =>
-        setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, fjosetRanking: v } }))
-      }
-    />
+    
     <Toggle
       theme={theme}
       label="Dagens historie"
@@ -447,14 +442,7 @@ export default function AdminSettings({ theme }: { theme: Theme }) {
         setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, history: v } }))
       }
     />
-    <Toggle
-      theme={theme}
-      label="Strava aktiviteter"
-      checked={!!settings.viewsEnabled.strava}
-      onChange={(v) =>
-        setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, strava: v } }))
-      }
-    />
+    
   </div>
   {settings.viewsEnabled.drinksMenu && (
     <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
@@ -463,16 +451,7 @@ export default function AdminSettings({ theme }: { theme: Theme }) {
   )}
 </div>
 
-      {settings.viewsEnabled.strava && (
-        <div style={{ ...card(theme), marginBottom: 16 }}>
-          <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 18 }}>Strava konfigurasjon</h2>
-          <div style={{ fontSize: 14, opacity: 0.75 }}>
-            Konfigurer STRAVA_ACCESS_TOKEN i .env filen på serveren.
-            <br />
-            Gå til <a href="https://www.strava.com/settings/api" target="_blank" rel="noopener noreferrer" style={{ color: theme.text }}>Strava API settings</a> for å få access token.
-          </div>
-        </div>
-      )}
+      
 
       <div style={{ ...card(theme), marginBottom: 16 }}>
         <h2 style={{ marginTop: 0, marginBottom: 12, fontSize: 18 }}>Dag / natt</h2>
@@ -548,6 +527,29 @@ export default function AdminSettings({ theme }: { theme: Theme }) {
               theme={theme}
               suffix="sek"
             />
+          </div>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <label style={{ display: "block", marginBottom: 6 }}>Per-visning varighet (sekunder, 5–600)</label>
+          <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : "1fr 1fr", gap: 8 }}>
+            <div>
+              <label style={{ display: "block", marginBottom: 6 }}>Dashboard</label>
+              <NumberInput value={settings.viewDurations?.dashboard ?? settings.rotateSeconds} onChange={(n) => setSettings((s) => ({ ...s, viewDurations: { ...(s.viewDurations||{}), dashboard: n } }))} min={5} max={600} step={1} theme={theme} suffix="sek" />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: 6 }}>Nyheter</label>
+              <NumberInput value={settings.viewDurations?.news ?? settings.rotateSeconds} onChange={(n) => setSettings((s) => ({ ...s, viewDurations: { ...(s.viewDurations||{}), news: n } }))} min={5} max={600} step={1} theme={theme} suffix="sek" />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: 6 }}>Kalender</label>
+              <NumberInput value={settings.viewDurations?.calendar ?? settings.rotateSeconds} onChange={(n) => setSettings((s) => ({ ...s, viewDurations: { ...(s.viewDurations||{}), calendar: n } }))} min={5} max={600} step={1} theme={theme} suffix="sek" />
+            </div>
+            
+            <div>
+              <label style={{ display: "block", marginBottom: 6 }}>Dagens historie</label>
+              <NumberInput value={settings.viewDurations?.history ?? settings.rotateSeconds} onChange={(n) => setSettings((s) => ({ ...s, viewDurations: { ...(s.viewDurations||{}), history: n } }))} min={5} max={600} step={1} theme={theme} suffix="sek" />
+            </div>
+            
           </div>
         </div>
       </div>
