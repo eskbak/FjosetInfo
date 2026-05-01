@@ -6,6 +6,7 @@ import NewsView from "./views/NewsView";
 import CalendarView from "./views/CalendarView";
 import HistoryView from "./views/HistoryView";
 import NationalDayView from "./views/NationalDayView";
+import OracleView from "./views/OracleView";
 import ArrivalOverlay from "./components/ArrivalOverlay";
 import PresenceDock from "./components/PresenceDock";
 import NotificationsCard from "./cards/NotificationsCard";
@@ -18,7 +19,7 @@ import type { Theme, Colors } from "./types";
 
 // Keep this in sync with server Settings type
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean; history?: boolean; nationalDay?: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean; history?: boolean; nationalDay?: boolean; oracle?: boolean };
   dayHours: { start: number; end: number }; // end exclusive
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600
@@ -29,15 +30,16 @@ type Settings = {
     drinksMenu?: number;
     history?: number;
     nationalDay?: number;
+    oracle?: number;
   };
 };
 
 const DEFAULT_SETTINGS: Settings = {
-  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, history: true, nationalDay: true },
+  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, history: true, nationalDay: true, oracle: true },
   dayHours: { start: 6, end: 18 },
   calendarDaysAhead: 5,
   rotateSeconds: 30,
-  viewDurations: { dashboard: 30, news: 30, calendar: 30, drinksMenu: 30, history: 30, nationalDay: 30 },
+  viewDurations: { dashboard: 30, news: 30, calendar: 30, drinksMenu: 30, history: 30, nationalDay: 30, oracle: 30 },
 };
 
 export default function App() {
@@ -147,7 +149,7 @@ export default function App() {
   // ---------- END HASH ROUTING ----------
 
 // ---------- Derive rotation/order from settings ----------
-type ViewKey = "dashboard" | "news" | "calendar" | "drinks" | "history" | "nationalDay";
+type ViewKey = "dashboard" | "news" | "calendar" | "drinks" | "history" | "nationalDay" | "oracle";
 
 const ORDER: ViewKey[] = useMemo(() => {
   // If DrinksMenu is enabled, it takes over the screen exclusively
@@ -158,6 +160,7 @@ const ORDER: ViewKey[] = useMemo(() => {
   if (settings.viewsEnabled.news) list.push("news");
   if (settings.viewsEnabled.calendar) list.push("calendar");
   if (settings.viewsEnabled.history) list.push("history");
+  if (settings.viewsEnabled.oracle) list.push("oracle");
   if (settings.viewsEnabled.nationalDay) list.push("nationalDay");
   return list.length ? list : ["dashboard"]; // fallback
 }, [
@@ -166,6 +169,7 @@ const ORDER: ViewKey[] = useMemo(() => {
   settings.viewsEnabled.calendar,
   settings.viewsEnabled.drinksMenu,
   settings.viewsEnabled.history,
+  settings.viewsEnabled.oracle,
   settings.viewsEnabled.nationalDay,
 ]);
 
@@ -362,6 +366,7 @@ const pageStyle: React.CSSProperties = {
       {view === "news" && <NewsView theme={theme} colors={COLORS} isDay={isDay} />}
       {view === "calendar" && <CalendarView theme={theme} colors={COLORS} isDay={isDay} />}
       {view === "history" && <HistoryView theme={theme} colors={COLORS} isDay={isDay} />}
+      {view === "oracle" && <OracleView theme={theme} />}
       {view === "nationalDay" && <NationalDayView />}
       {view === "drinks" && <DrinksMenu theme={theme} colors={COLORS} />}
 
@@ -403,6 +408,9 @@ const pageStyle: React.CSSProperties = {
         </button>
         <button onClick={() => setView("nationalDay")} style={btn(theme)}>
           17. mai
+        </button>
+        <button onClick={() => setView("oracle")} style={btn(theme)}>
+          Orakelet
         </button>
       </div>
     </div>

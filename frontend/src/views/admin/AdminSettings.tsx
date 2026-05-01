@@ -3,19 +3,19 @@ import { useEffect, useMemo, useState } from "react";
 import type { Theme } from "../../types";
 
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean; history?: boolean; nationalDay?: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean; history?: boolean; nationalDay?: boolean; oracle?: boolean };
   dayHours: { start: number; end: number }; // end exclusive
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600
-  viewDurations?: { dashboard?: number; news?: number; calendar?: number; drinksMenu?: number; history?: number; nationalDay?: number };
+  viewDurations?: { dashboard?: number; news?: number; calendar?: number; drinksMenu?: number; history?: number; nationalDay?: number; oracle?: number };
 };
 
 const DEFAULTS: Settings = {
-  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, history: true, nationalDay: true },
+  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, history: true, nationalDay: true, oracle: true },
   dayHours: { start: 6, end: 18 },
   calendarDaysAhead: 5,
   rotateSeconds: 30,
-  viewDurations: { dashboard: 30, news: 30, calendar: 30, drinksMenu: 30, history: 30, nationalDay: 30 },
+  viewDurations: { dashboard: 30, news: 30, calendar: 30, drinksMenu: 30, history: 30, nationalDay: 30, oracle: 30 },
 };
 
 function card(theme: Theme): React.CSSProperties {
@@ -388,13 +388,13 @@ export default function AdminSettings({ theme }: { theme: Theme }) {
             // Activate DrinksMenu, disable others
             return { 
               ...s, 
-              viewsEnabled: { dashboard: false, news: false, calendar: false, drinksMenu: true, history: false, nationalDay: false } 
+              viewsEnabled: { dashboard: false, news: false, calendar: false, drinksMenu: true, history: false, nationalDay: false, oracle: false } 
             };
           } else {
             // Deactivate DrinksMenu, restore to a sensible default (all on)
             return {
               ...s,
-              viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, history: true, nationalDay: true }
+              viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, history: true, nationalDay: true, oracle: true }
             };
           }
         })
@@ -448,6 +448,14 @@ export default function AdminSettings({ theme }: { theme: Theme }) {
       checked={!!settings.viewsEnabled.nationalDay}
       onChange={(v) =>
         setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, nationalDay: v } }))
+      }
+    />
+    <Toggle
+      theme={theme}
+      label="Fjøset Orakelet"
+      checked={!!settings.viewsEnabled.oracle}
+      onChange={(v) =>
+        setSettings((s) => ({ ...s, viewsEnabled: { ...s.viewsEnabled, oracle: v } }))
       }
     />
     
@@ -561,7 +569,10 @@ export default function AdminSettings({ theme }: { theme: Theme }) {
               <label style={{ display: "block", marginBottom: 6 }}>17. mai</label>
               <NumberInput value={settings.viewDurations?.nationalDay ?? settings.rotateSeconds} onChange={(n) => setSettings((s) => ({ ...s, viewDurations: { ...(s.viewDurations||{}), nationalDay: n } }))} min={5} max={600} step={1} theme={theme} suffix="sek" />
             </div>
-            
+            <div>
+              <label style={{ display: "block", marginBottom: 6 }}>Fjøset Orakelet</label>
+              <NumberInput value={settings.viewDurations?.oracle ?? settings.rotateSeconds} onChange={(n) => setSettings((s) => ({ ...s, viewDurations: { ...(s.viewDurations||{}), oracle: n } }))} min={5} max={600} step={1} theme={theme} suffix="sek" />
+            </div>
           </div>
         </div>
       </div>

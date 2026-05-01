@@ -5,7 +5,8 @@
     "calendar": true,
     "drinksMenu": false,
     "history": true,
-    "nationalDay": true
+    "nationalDay": true,
+    "oracle": true
   },
   "dayHours": {
     "start": 8,
@@ -19,6 +20,7 @@
     "calendar": 5,
     "drinksMenu": 15,
     "history": 30,
-    "nationalDay": 30
+    "nationalDay": 30,
+    "oracle": 30
   }
 }
