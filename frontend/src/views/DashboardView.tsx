@@ -4,7 +4,7 @@ import AtBCard from "../cards/AtBCard";
 import YRCard from "../cards/YRCard";
 import { useAvailableHeight } from "../hooks/useAvailableHeight";
 
-const STOP_PLACE_ID = "NSR:StopPlace:42404";
+const STOP_PLACE_ID = "NSR:StopPlace:42284"; // Gyldenløves gate, Trondheim, Norway
 const LAT = "63.4305";
 const LON = "10.3951";
 

@@ -4,7 +4,8 @@
     "news": true,
     "calendar": true,
     "drinksMenu": false,
-    "history": true
+    "history": true,
+    "nationalDay": true
   },
   "dayHours": {
     "start": 8,
@@ -17,6 +18,7 @@
     "news": 5,
     "calendar": 5,
     "drinksMenu": 15,
-    "history": 30
+    "history": 30,
+    "nationalDay": 30
   }
 }

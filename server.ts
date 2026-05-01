@@ -86,7 +86,7 @@ type NeighborRow = { ip: string; mac: string; state: string };
 
 // ---------------- Settings schema ----------------
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu: boolean; history: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu: boolean; history: boolean; nationalDay: boolean };
   dayHours: { start: number; end: number }; // 0..24 (end is exclusive)
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600 (fallback global)
@@ -96,6 +96,7 @@ type Settings = {
     calendar?: number;
     drinksMenu?: number;
     history?: number;
+    nationalDay?: number;
   };
 };
 
@@ -143,7 +144,7 @@ const SETTINGS_FILE = process.env.SETTINGS_FILE
   : path.join(__dirname, "settings.json");
 
 const DEFAULT_SETTINGS = {
-  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, history: true },
+  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, history: true, nationalDay: true },
   dayHours: { start: 6, end: 18 }, // local hours where UI is considered "day"
   calendarDaysAhead: 4,
   rotateSeconds: 45,
@@ -153,6 +154,7 @@ const DEFAULT_SETTINGS = {
     calendar: 45,
     drinksMenu: 45,
     history: 45,
+    nationalDay: 45,
   },
 };
 
@@ -1266,11 +1268,12 @@ function normalizeSettings(input: any, prev?: Settings): Settings {
     calendar: !!v.calendar,
     drinksMenu: !!v.drinksMenu,
     history: !!v.history,
+    nationalDay: typeof v.nationalDay === "boolean" ? v.nationalDay : true,
   };
 
   // Server-side enforcement: when DrinksMenu is active, disable others
   if (outViews.drinksMenu) {
-    outViews = { dashboard: false, news: false, calendar: false, drinksMenu: true, history: false };
+    outViews = { dashboard: false, news: false, calendar: false, drinksMenu: true, history: false, nationalDay: false };
   }
 
   const out: Settings = {
@@ -1284,6 +1287,7 @@ function normalizeSettings(input: any, prev?: Settings): Settings {
       calendar: clampInt(input?.viewDurations?.calendar ?? base.viewDurations?.calendar, 5, 600, base.viewDurations?.calendar ?? base.rotateSeconds),
       drinksMenu: clampInt(input?.viewDurations?.drinksMenu ?? base.viewDurations?.drinksMenu, 5, 600, base.viewDurations?.drinksMenu ?? base.rotateSeconds),
       history: clampInt(input?.viewDurations?.history ?? base.viewDurations?.history, 5, 600, base.viewDurations?.history ?? base.rotateSeconds),
+      nationalDay: clampInt(input?.viewDurations?.nationalDay ?? base.viewDurations?.nationalDay, 5, 600, base.viewDurations?.nationalDay ?? base.rotateSeconds),
     },
   };
   return out;
