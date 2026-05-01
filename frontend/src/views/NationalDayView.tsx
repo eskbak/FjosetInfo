@@ -61,7 +61,7 @@ export default function NationalDayView() {
         overflow: "hidden",
         color: "#fff",
         background:
-          "linear-gradient(115deg, #ba0c2f 0 24%, #fff 24% 31%, #00205b 31% 44%, #fff 44% 51%, #ba0c2f 51% 100%)",
+          "linear-gradient(180deg, #ba0c2f 0 24%, #ffffff 24% 29%, #00205b 29% 43%, #ffffff 43% 48%, #ba0c2f 48% 100%)",
         fontFamily: "system-ui, sans-serif",
         display: "grid",
         placeItems: "center",
@@ -73,7 +73,7 @@ export default function NationalDayView() {
           position: "absolute",
           inset: 0,
           background:
-            "radial-gradient(circle at 12% 18%, rgba(255,255,255,0.28), transparent 18%), radial-gradient(circle at 88% 78%, rgba(255,255,255,0.22), transparent 20%)",
+            "linear-gradient(90deg, rgba(0,32,91,0.65) 0 8%, transparent 8% 92%, rgba(0,32,91,0.65) 92% 100%), radial-gradient(circle at 50% 12%, rgba(255,255,255,0.24), transparent 20%), radial-gradient(circle at 50% 86%, rgba(255,255,255,0.2), transparent 24%)",
         }}
       />
 
@@ -98,6 +98,98 @@ export default function NationalDayView() {
 
       <style>
         {`
+          .national-stage {
+            position: relative;
+            z-index: 2;
+            width: min(760px, calc(100vw - 44px));
+            height: min(1180px, calc(100vh - 44px));
+            display: grid;
+            grid-template-rows: auto auto 1fr auto;
+            align-items: center;
+            gap: clamp(18px, 3vh, 34px);
+            text-align: center;
+            text-shadow: 0 3px 18px rgba(0,0,0,0.28);
+          }
+
+          .national-kicker {
+            justify-self: center;
+            display: inline-grid;
+            grid-template-columns: 64px auto 64px;
+            align-items: center;
+            gap: 14px;
+            padding: 10px 0;
+            font-size: clamp(17px, 3.2vw, 28px);
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+          }
+
+          .national-kicker::before,
+          .national-kicker::after {
+            content: "";
+            height: 8px;
+            border-radius: 999px;
+          }
+
+          .national-kicker::before {
+            background: #ffffff;
+          }
+
+          .national-kicker::after {
+            background: #00205b;
+          }
+
+          .national-title {
+            margin: 0;
+            font-size: clamp(96px, 25vw, 218px);
+            line-height: 0.82;
+            letter-spacing: 0;
+            font-weight: 950;
+            -webkit-text-stroke: clamp(3px, 1vw, 8px) #00205b;
+            paint-order: stroke fill;
+            text-shadow: 0 9px 0 #ba0c2f, 0 20px 28px rgba(0,0,0,0.4), 0 0 34px rgba(255,255,255,0.42);
+          }
+
+          .national-countdown-grid {
+            align-self: stretch;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: clamp(12px, 2.2vh, 22px);
+          }
+
+          .national-countdown-card {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: clamp(14px, 2.4vh, 28px) clamp(10px, 3vw, 22px);
+            border: 3px solid rgba(255,255,255,0.82);
+            background: rgba(0, 32, 91, 0.72);
+            box-shadow: 0 18px 46px rgba(0,0,0,0.28);
+          }
+
+          .national-countdown-value {
+            font-size: clamp(58px, 17vw, 136px);
+            line-height: 0.86;
+            font-weight: 950;
+            font-variant-numeric: tabular-nums;
+          }
+
+          .national-countdown-label {
+            margin-top: 14px;
+            font-size: clamp(15px, 3.6vw, 26px);
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+          }
+
+          .national-subtitle {
+            margin: 0;
+            font-size: clamp(26px, 7vw, 58px);
+            font-weight: 950;
+            line-height: 1.04;
+          }
+
           @keyframes syttendeMaiConfetti {
             0% {
               transform: translate3d(0, -12vh, 0) rotate(0deg);
@@ -149,129 +241,24 @@ export default function NationalDayView() {
         );
       })}
 
-      <section
-        style={{
-          position: "relative",
-          zIndex: 1,
-          width: "min(1120px, calc(100vw - 56px))",
-          display: "grid",
-          gap: 26,
-          textAlign: "center",
-          textShadow: "0 3px 18px rgba(0,0,0,0.28)",
-        }}
-      >
-        <div
-          style={{
-            justifySelf: "center",
-            display: "inline-grid",
-            gridTemplateColumns: "auto auto auto",
-            alignItems: "center",
-            gap: 14,
-            fontSize: "clamp(15px, 2vw, 24px)",
-            fontWeight: 800,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-          }}
-        >
-          <span style={{ width: 76, height: 8, background: "#fff", borderRadius: 999 }} />
-          <span>Nedtelling til 17. mai</span>
-          <span style={{ width: 76, height: 8, background: "#00205b", borderRadius: 999 }} />
-        </div>
+      <section className="national-stage">
+        <div className="national-kicker">Nedtelling til</div>
 
-        <h1
-          style={{
-            margin: 0,
-            fontSize: "clamp(72px, 16vw, 210px)",
-            lineHeight: 0.86,
-            letterSpacing: 0,
-            fontWeight: 950,
-            WebkitTextStroke: "clamp(2px, 0.55vw, 8px) #00205b",
-            paintOrder: "stroke fill",
-            textShadow:
-              "0 8px 0 #ba0c2f, 0 18px 26px rgba(0,0,0,0.38), 0 0 34px rgba(255,255,255,0.42)",
-          }}
-        >
-          17. mai
-        </h1>
+        <h1 className="national-title">17. mai</h1>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-            gap: 14,
-          }}
-        >
+        <div className="national-countdown-grid">
           {stats.map((item) => (
-            <div
-              key={item.label}
-              style={{
-                minWidth: 0,
-                padding: "clamp(14px, 2vw, 28px) clamp(10px, 1.8vw, 22px)",
-                border: "3px solid rgba(255,255,255,0.78)",
-                background: "rgba(0, 32, 91, 0.62)",
-                boxShadow: "0 18px 46px rgba(0,0,0,0.24)",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "clamp(42px, 9vw, 126px)",
-                  lineHeight: 0.9,
-                  fontWeight: 950,
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {isToday ? "00" : item.value}
-              </div>
-              <div
-                style={{
-                  marginTop: 12,
-                  fontSize: "clamp(14px, 2vw, 26px)",
-                  fontWeight: 850,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.08em",
-                }}
-              >
-                {item.label}
-              </div>
+            <div key={item.label} className="national-countdown-card">
+              <div className="national-countdown-value">{isToday ? "00" : item.value}</div>
+              <div className="national-countdown-label">{item.label}</div>
             </div>
           ))}
         </div>
 
-        <p
-          style={{
-            margin: 0,
-            fontSize: "clamp(24px, 4vw, 58px)",
-            fontWeight: 900,
-            lineHeight: 1.05,
-          }}
-        >
+        <p className="national-subtitle">
           {isToday ? "Gratulerer med dagen!" : "Get ready boys!"}
         </p>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-            gap: 12,
-            alignItems: "stretch",
-            fontSize: "clamp(15px, 2.2vw, 30px)",
-            fontWeight: 850,
-          }}
-        >
-          {["Pils", "Kake", "Pils"].map((word, i) => (
-            <div
-              key={word}
-              style={{
-                padding: "16px 10px",
-                background: i === 1 ? "rgba(255,255,255,0.88)" : "rgba(186,12,47,0.76)",
-                color: i === 1 ? "#00205b" : "#fff",
-                borderTop: "8px solid #00205b",
-              }}
-            >
-              {word}
-            </div>
-          ))}
-        </div>
       </section>
     </main>
   );
