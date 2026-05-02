@@ -81,32 +81,37 @@ export default function NationalDayView() {
             color: #ffffff;
             text-align: center;
             text-shadow: 0 3px 18px rgba(0,0,0,0.28);
-            background:
-              linear-gradient(90deg, transparent 0 47%, #00205b 47% 53%, transparent 53% 100%),
-              linear-gradient(180deg, transparent 0 43.75%, #00205b 43.75% 56.25%, transparent 56.25% 100%),
-              linear-gradient(90deg, transparent 0 44%, #ffffff 44% 56%, transparent 56% 100%),
-              linear-gradient(180deg, transparent 0 37.5%, #ffffff 37.5% 62.5%, transparent 62.5% 100%),
-              linear-gradient(135deg, #d3123f 0%, #ba0c2f 46%, #8f0a25 100%);
+            background: linear-gradient(135deg, #d3123f 0%, #ba0c2f 46%, #8f0a25 100%);
             box-shadow: 0 28px 90px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.28);
           }
 
           .national-card-view::before {
             content: "";
             position: absolute;
-            inset: 0;
+            left: 50%;
+            top: 50%;
+            width: max(100%, calc(100vh * 22 / 16));
+            aspect-ratio: 22 / 16;
+            transform: translate(-50%, -50%);
             background:
-              radial-gradient(circle at 74% 14%, rgba(255,255,255,0.28), transparent 20%),
-              radial-gradient(circle at 18% 78%, rgba(0,32,91,0.22), transparent 28%),
-              linear-gradient(105deg, rgba(255,255,255,0.24), transparent 22% 76%, rgba(0,0,0,0.14));
+              linear-gradient(90deg, transparent 0 45.455%, #00205b 45.455% 54.545%, transparent 54.545% 100%),
+              linear-gradient(180deg, transparent 0 43.75%, #00205b 43.75% 56.25%, transparent 56.25% 100%),
+              linear-gradient(90deg, transparent 0 40.909%, #ffffff 40.909% 59.091%, transparent 59.091% 100%),
+              linear-gradient(180deg, transparent 0 37.5%, #ffffff 37.5% 62.5%, transparent 62.5% 100%),
+              #ba0c2f;
             pointer-events: none;
           }
 
           .national-card-view::after {
             content: "";
             position: absolute;
-            inset: clamp(14px, 2vw, 24px);
+            inset: 0;
             border: 1px solid rgba(255,255,255,0.28);
             border-radius: clamp(22px, 4vw, 44px);
+            background:
+              radial-gradient(circle at 74% 14%, rgba(255,255,255,0.28), transparent 20%),
+              radial-gradient(circle at 18% 78%, rgba(0,32,91,0.22), transparent 28%),
+              linear-gradient(105deg, rgba(255,255,255,0.24), transparent 22% 76%, rgba(0,0,0,0.14));
             pointer-events: none;
           }
 
