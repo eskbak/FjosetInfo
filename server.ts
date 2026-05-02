@@ -86,7 +86,7 @@ type NeighborRow = { ip: string; mac: string; state: string };
 
 // ---------------- Settings schema ----------------
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu: boolean; history: boolean; nationalDay: boolean; oracle: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu: boolean; history: boolean; nationalDay: boolean; oracle: boolean; halvlitere: boolean };
   dayHours: { start: number; end: number }; // 0..24 (end is exclusive)
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600 (fallback global)
@@ -98,6 +98,7 @@ type Settings = {
     history?: number;
     nationalDay?: number;
     oracle?: number;
+    halvlitere?: number;
   };
 };
 
@@ -145,7 +146,7 @@ const SETTINGS_FILE = process.env.SETTINGS_FILE
   : path.join(__dirname, "settings.json");
 
 const DEFAULT_SETTINGS = {
-  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, history: true, nationalDay: true, oracle: true },
+  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, history: true, nationalDay: true, oracle: true, halvlitere: true },
   dayHours: { start: 6, end: 18 }, // local hours where UI is considered "day"
   calendarDaysAhead: 4,
   rotateSeconds: 45,
@@ -157,6 +158,7 @@ const DEFAULT_SETTINGS = {
     history: 45,
     nationalDay: 45,
     oracle: 45,
+    halvlitere: 45,
   },
 };
 
@@ -1272,11 +1274,12 @@ function normalizeSettings(input: any, prev?: Settings): Settings {
     history: !!v.history,
     nationalDay: typeof v.nationalDay === "boolean" ? v.nationalDay : true,
     oracle: typeof v.oracle === "boolean" ? v.oracle : true,
+    halvlitere: typeof v.halvlitere === "boolean" ? v.halvlitere : true,
   };
 
   // Server-side enforcement: when DrinksMenu is active, disable others
   if (outViews.drinksMenu) {
-    outViews = { dashboard: false, news: false, calendar: false, drinksMenu: true, history: false, nationalDay: false, oracle: false };
+    outViews = { dashboard: false, news: false, calendar: false, drinksMenu: true, history: false, nationalDay: false, oracle: false, halvlitere: false };
   }
 
   const out: Settings = {
@@ -1292,6 +1295,7 @@ function normalizeSettings(input: any, prev?: Settings): Settings {
       history: clampInt(input?.viewDurations?.history ?? base.viewDurations?.history, 5, 600, base.viewDurations?.history ?? base.rotateSeconds),
       nationalDay: clampInt(input?.viewDurations?.nationalDay ?? base.viewDurations?.nationalDay, 5, 600, base.viewDurations?.nationalDay ?? base.rotateSeconds),
       oracle: clampInt(input?.viewDurations?.oracle ?? base.viewDurations?.oracle, 5, 600, base.viewDurations?.oracle ?? base.rotateSeconds),
+      halvlitere: clampInt(input?.viewDurations?.halvlitere ?? base.viewDurations?.halvlitere, 5, 600, base.viewDurations?.halvlitere ?? base.rotateSeconds),
     },
   };
   return out;

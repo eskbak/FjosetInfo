@@ -7,6 +7,7 @@ import CalendarView from "./views/CalendarView";
 import HistoryView from "./views/HistoryView";
 import NationalDayView from "./views/NationalDayView";
 import OracleView from "./views/OracleView";
+import HalvlitereView from "./views/HalvlitereView";
 import ArrivalOverlay from "./components/ArrivalOverlay";
 import PresenceDock from "./components/PresenceDock";
 import NotificationsCard from "./cards/NotificationsCard";
@@ -19,7 +20,7 @@ import type { Theme, Colors } from "./types";
 
 // Keep this in sync with server Settings type
 type Settings = {
-  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean; history?: boolean; nationalDay?: boolean; oracle?: boolean };
+  viewsEnabled: { dashboard: boolean; news: boolean; calendar: boolean; drinksMenu?: boolean; history?: boolean; nationalDay?: boolean; oracle?: boolean; halvlitere?: boolean };
   dayHours: { start: number; end: number }; // end exclusive
   calendarDaysAhead: number;                // 0..14
   rotateSeconds: number;                    // 5..600
@@ -31,15 +32,16 @@ type Settings = {
     history?: number;
     nationalDay?: number;
     oracle?: number;
+    halvlitere?: number;
   };
 };
 
 const DEFAULT_SETTINGS: Settings = {
-  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, history: true, nationalDay: true, oracle: true },
+  viewsEnabled: { dashboard: true, news: true, calendar: true, drinksMenu: false, history: true, nationalDay: true, oracle: true, halvlitere: true },
   dayHours: { start: 6, end: 18 },
   calendarDaysAhead: 5,
   rotateSeconds: 30,
-  viewDurations: { dashboard: 30, news: 30, calendar: 30, drinksMenu: 30, history: 30, nationalDay: 30, oracle: 30 },
+  viewDurations: { dashboard: 30, news: 30, calendar: 30, drinksMenu: 30, history: 30, nationalDay: 30, oracle: 30, halvlitere: 30 },
 };
 
 export default function App() {
@@ -149,7 +151,7 @@ export default function App() {
   // ---------- END HASH ROUTING ----------
 
 // ---------- Derive rotation/order from settings ----------
-type ViewKey = "dashboard" | "news" | "calendar" | "drinks" | "history" | "nationalDay" | "oracle";
+type ViewKey = "dashboard" | "news" | "calendar" | "drinks" | "history" | "nationalDay" | "oracle" | "halvlitere";
 
 const ORDER: ViewKey[] = useMemo(() => {
   // If DrinksMenu is enabled, it takes over the screen exclusively
@@ -161,6 +163,7 @@ const ORDER: ViewKey[] = useMemo(() => {
   if (settings.viewsEnabled.calendar) list.push("calendar");
   if (settings.viewsEnabled.history) list.push("history");
   if (settings.viewsEnabled.oracle) list.push("oracle");
+  if (settings.viewsEnabled.halvlitere) list.push("halvlitere");
   if (settings.viewsEnabled.nationalDay) list.push("nationalDay");
   return list.length ? list : ["dashboard"]; // fallback
 }, [
@@ -170,6 +173,7 @@ const ORDER: ViewKey[] = useMemo(() => {
   settings.viewsEnabled.drinksMenu,
   settings.viewsEnabled.history,
   settings.viewsEnabled.oracle,
+  settings.viewsEnabled.halvlitere,
   settings.viewsEnabled.nationalDay,
 ]);
 
@@ -186,7 +190,7 @@ const ORDER: ViewKey[] = useMemo(() => {
 
     const [view, setView] = useState<ViewKey>(ORDER[0] ?? "dashboard");
     const drinksMode = settings.viewsEnabled.drinksMenu || view === "drinks";
-    const fullScreenMode = drinksMode || view === "nationalDay";
+    const fullScreenMode = drinksMode;
 
     const getViewDurationSeconds = (v: ViewKey) => {
       // server uses "drinksMenu" key, client view key is "drinks"
@@ -367,6 +371,7 @@ const pageStyle: React.CSSProperties = {
       {view === "calendar" && <CalendarView theme={theme} colors={COLORS} isDay={isDay} />}
       {view === "history" && <HistoryView theme={theme} colors={COLORS} isDay={isDay} />}
       {view === "oracle" && <OracleView theme={theme} />}
+      {view === "halvlitere" && <HalvlitereView theme={theme} />}
       {view === "nationalDay" && <NationalDayView />}
       {view === "drinks" && <DrinksMenu theme={theme} colors={COLORS} />}
 
@@ -411,6 +416,9 @@ const pageStyle: React.CSSProperties = {
         </button>
         <button onClick={() => setView("oracle")} style={btn(theme)}>
           Orakelet
+        </button>
+        <button onClick={() => setView("halvlitere")} style={btn(theme)}>
+          mjØLketanken
         </button>
       </div>
     </div>
