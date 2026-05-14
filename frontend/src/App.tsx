@@ -379,7 +379,8 @@ const pageStyle: React.CSSProperties = {
       {!fullScreenMode && arrivalName && <ArrivalOverlay name={arrivalName} onClose={handleArrivalClosed} />}
 
       {/* dev view switcher */}
-      <div
+      {!fullScreenMode && (
+        <div
         style={{
           position: "fixed",
           right: 16,
@@ -420,7 +421,8 @@ const pageStyle: React.CSSProperties = {
         <button onClick={() => setView("halvlitere")} style={btn(theme)}>
           mjØLketanken
         </button>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,12 +1,13 @@
 {
   "viewsEnabled": {
-    "dashboard": true,
-    "news": true,
-    "calendar": true,
-    "drinksMenu": false,
-    "history": true,
-    "nationalDay": true,
-    "oracle": true
+    "dashboard": false,
+    "news": false,
+    "calendar": false,
+    "drinksMenu": true,
+    "history": false,
+    "nationalDay": false,
+    "oracle": false,
+    "halvlitere": false
   },
   "dayHours": {
     "start": 8,
@@ -21,6 +22,7 @@
     "drinksMenu": 15,
     "history": 30,
     "nationalDay": 30,
-    "oracle": 30
+    "oracle": 30,
+    "halvlitere": 15
   }
 }
